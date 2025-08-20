@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Callable, List, Optional, Tuple
-from .preprocessing import resize, to_grayscale, build_target, remove_background
+from .preprocessing import resize, to_grayscale, build_target, remove_background, circular_mask
 import math, cv2, numpy as np
 
 Coord = Tuple[int, int]
@@ -21,7 +21,6 @@ def _line_mask(shape: Tuple[int, int], p0: Tuple[int, int], p1: Tuple[int, int],
     cv2.line(m, (int(p0[0]), int(p0[1])), (int(p1[0]), int(p1[1])),
              color=255, thickness=max(1, int(thickness)), lineType=cv2.LINE_AA)
     return (m.astype(np.float32) / 255.0)
-
 
 def convert_image_to_path(
     img_bgr: np.ndarray,
@@ -54,9 +53,13 @@ def convert_image_to_path(
     if (use_backgound_removal):
         img_bgr = remove_background(img_bgr)
 
-    img_bgr = resize(img_bgr, work_size=work_size)
+    img_bgr = resize(img_bgr, size=work_size)
     gray = to_grayscale(img_bgr, use_clahe=True)
     target = build_target(gray, edge_weight=edge_weight)
+
+    # apply circular mask, so only inside the circle matters
+    board_mask = circular_mask(*target.shape, margin=16)
+    target *= board_mask
 
     residual = target.copy()
 
@@ -74,6 +77,12 @@ def convert_image_to_path(
             s = float(m.sum()) + 1e-6
             masks[(i, j)] = m
             lens[(i, j)] = s
+
+    # ---------------------- init candidates ----------------------
+    stride = max(1, n_pins // 64)    # ~64 candidates per step
+    base = list(range(0, n_pins, stride))
+    cand_lists = [(base[i % len(base):] + base[:i % len(base)]) for i in range(n_pins)]
+    MAX_CANDS = 64
 
     # ---------------------- Greedy selection with hop relaxation ----------------------
     path: List[Segment] = []
@@ -94,6 +103,9 @@ def convert_image_to_path(
     len_penalty = 0.0005           # penalty for very long lines
     angle_penalty_coeff = 0.03     # discourage repeating the same direction
     prev_vec = None                # last chosen direction (for angle penalty)
+    
+    # prevent going back to the same pin
+    prev_pin = None
 
     # ---------------------- main loop ----------------------
     while step_idx < steps:
@@ -107,7 +119,13 @@ def convert_image_to_path(
         # try with required hop; if no candidate, relax hop until 0
         while best_j is None and hop_req >= 0:
             for j in range(n_pins):
-                if j == current: continue
+                if j == current: 
+                    continue
+
+                # no immediate backtrack
+                if prev_pin is not None and j == prev_pin:
+                    continue
+
                 # circular hop distance
                 hop = abs(j - current)
                 hop = min(hop, n_pins - hop)
@@ -115,13 +133,37 @@ def convert_image_to_path(
 
                 m = masks[(current, j)]
 
+                """
+                # candidate selection for speedup and aviod local "grazing"
+                candidates = []
+                for j in cand_lists[current]:
+                    if j == current:
+                        continue
+                    hop = abs(j - current); hop = min(hop, n_pins - hop)
+                    if hop < hop_req:
+                        continue
+                    # optional quick angle gate vs. previous vector
+                    if prev_vec is not None:
+                        v = pins[j] - pins[current]
+                        a = prev_vec / (np.linalg.norm(prev_vec) + 1e-9)
+                        b = v / (np.linalg.norm(v) + 1e-9)
+                        if float(np.dot(a, b)) > 0.97:  # nearly parallel; skip
+                            continue
+                    candidates.append(j)
+                    if len(candidates) >= MAX_CANDS:
+                        break
+
+                if not candidates:  # fallback
+                    candidates = [j for j in range(n_pins) if j != current]
+                """
+
                 # multi-scale score
                 score_multi = cv2.GaussianBlur(residual, (0, 0), blur_sigma)
                 hi = residual - score_multi
                 score_val = ((0.8 * score_multi + hi_w * hi) * m).sum()
-                score_val /= (lens[(current, j)] + 1e-6) # normalize
 
-                # length penalty
+                # normalize and length penalty
+                score_val /= (lens[(current, j)] + 1e-6) 
                 score_val /= (1.0 + len_penalty * lens[(current, j)])
 
                 # angle penalty
@@ -133,11 +175,11 @@ def convert_image_to_path(
                     score_val -= angle_penalty_coeff * cos_sim
 
                 # light cooldown: discourage bouncing to very recent pin
-                cooldown_penalty = 0.02 if (step_idx - recent[j]) < 10 else 0.0
-                s -= cooldown_penalty
+                if (step_idx - recent[j]) < 10:
+                    score_val -= 0.02
 
-                if s > best_score:
-                    best_score, best_j = s, j
+                if score_val > best_score:
+                    best_score, best_j = score_val, j
 
             if best_j is None:
                 hop_req -= 1  # relax and retry
@@ -148,11 +190,16 @@ def convert_image_to_path(
 
         # apply chosen line
         m = masks[(current, best_j)]
-        residual -= strength * (m ** 0.9)    # small gamma keeps sub-pixel AA softer
-        np.maximum(residual, 0.0, out=residual)  # clamp to [0,1]
+        line_mean = float((residual * m).sum() / lens[(current, best_j)] + 1e-6)
 
-        # track direction for next step (for angle penalty)
+        # adaptive "ink"
+        ink = strength * (0.5 + 0.5 * line_mean)
+        residual -= ink * m   
+        np.maximum(residual, 0.0, out=residual)
+
+        # track for next step 
         prev_vec = pins[best_j] - pins[current]
+        prev_pin = current
 
         # update error for early stopping
         prev_error = error

@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "No image", "Load an image first."); return
 
         # Preprocessing preview,  is done in solver already
-        preview_rgb = preprocessing.preview(self.img_bgr, edge_weight=0.5)
+        preview_rgb = preprocessing.preview(self.img_bgr, edge_weight=0.5, max_size=512)
         h, w, _ = preview_rgb.shape
         qimg = QImage(preview_rgb.data, w, h, 3 * w, QImage.Format_RGB888)
         self.image_label.setPixmap(QPixmap.fromImage(qimg).scaled(

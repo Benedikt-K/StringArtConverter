@@ -3,6 +3,12 @@ from rembg import remove as rembg_remove
 import cv2
 import numpy as np
 
+def circular_mask(h: int, w: int, margin: int = 16) -> np.ndarray:
+    y, x = np.ogrid[:h, :w]
+    cy, cx = h // 2, w // 2
+    r = min(cx, cy) - margin
+    return (((x - cx)**2 + (y - cy)**2) <= (r*r)).astype(np.float32)
+
 def to_grayscale(img_bgr: np.ndarray, use_clahe: bool = True) -> np.ndarray:
     """
     Convert to grayscale (uint8 0..255) with blur. Optionally apply CLAHE for better contrast.
@@ -43,31 +49,55 @@ def detect_edges_sobel(gray: np.ndarray, blur: int = 3) -> np.ndarray:
     mag /= (mag.max() + 1e-6)
     return mag
 
-def build_target(gray: np.ndarray, edge_weight: float = 0.65, tone_weight: float = 0.25, edge_mode: str = "sobel") -> np.ndarray:
+def build_target(
+    gray: np.ndarray,
+    edge_weight: float = 0.60,
+    tone_weight: float = 0.20,
+    edge_mode: str = "sobel",
+    *,
+    edge_blur_ksize: int = 3,
+    edge_high_pct: float = 0.90,   # 90th percentile for stretching edges
+    tone_gamma: float = 1.0,       # >1 darkens mids, <1 brightens mids
+) -> np.ndarray:
     """
-    Build the solver 'target' as a weighted blend of darkness and edges.
-    - gray: grayscale uint8 image
-    - edge_weight: [0..1], weight of edge map vs tone
-    Returns float32 array in [0,1].
+    Produce target in [0,1] as an explicit 3-way mix:
+      target = w_dark * dark + w_edge * edges + w_tone * tone
+    with w_dark = 1 - (edge_weight + tone_weight).
+    Extra steps: edge denoise+stretch, keep bright zones slightly >0, optional tone gamma.
     """
-    dark = (255 - gray).astype(np.float32) / 255.0
+    # --- base maps ---
+    tone = gray.astype(np.float32) / 255.0
+
+    # darkness; keep bright zones slightly >0 so they aren't completely ignored
+    dark = (1.0 - tone)
     dark = np.clip(dark, 0.0, 0.92)
 
-    if (edge_mode.lower() == "canny"):
-        edges = detect_edges_canny(gray, low=70, high=180, blur=3)
+    # edges
+    if edge_mode.lower() == "canny":
+        edges = detect_edges_canny(gray, low=70, high=180, blur=edge_blur_ksize)
     else:
-        edges = detect_edges_sobel(gray)
+        gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+        edges = cv2.magnitude(gx, gy)
+        if edge_blur_ksize > 0:
+            edges = cv2.GaussianBlur(edges, (edge_blur_ksize, edge_blur_ksize), 0)
+        # contrast-stretch by percentile to suppress noise
+        hi = float(np.percentile(edges, edge_high_pct * 100.0))
+        lo = float(np.percentile(edges, 40.0))  # floor so weak texture goes to ~0
+        edges = (edges - lo) / (max(1e-6, hi - lo))
+        edges = np.clip(edges, 0.0, 1.0)
 
-    edge_weight = float(np.clip(edge_weight, 0.0, 1.0))
-    tone_weight = float(np.clip(tone_weight, 0.0, 1.0))
+    # optional tone gamma for portraits
+    if abs(tone_gamma - 1.0) > 1e-6:
+        tone = np.power(tone, tone_gamma)
 
-    target = (1.0 - edge_weight) * dark + edge_weight * edges
+    # --- explicit 3-way weights (sum to 1) ---
+    ew = float(np.clip(edge_weight, 0.0, 1.0))
+    tw = float(np.clip(tone_weight, 0.0, 1.0))
+    dw = max(0.0, 1.0 - (ew + tw))  # remaining mass to darkness
 
-    tone = gray.astype(np.float32) / 255.0
-    target = (1.0 - tone_weight) * dark + tone_weight * edges
-
-    target = np.clip(target, 0.0, 1.0)
-    return target
+    target = dw * dark + ew * edges + tw * tone
+    return np.clip(target, 0.0, 1.0)
 
 def resize(
     img_bgr: np.ndarray,
@@ -132,7 +162,7 @@ def preview(
     - save_path: if given, save preview as PNG
     - max_size: maximum size of the image
     """
-    img_bgr = resize(img_bgr, work_size=max_size)
+    img_bgr = resize(img_bgr, size=max_size)
     #img_bgr = remove_background(img_bgr)
     gray = to_grayscale(img_bgr, use_clahe=True)
     edges = detect_edges_canny(gray)
