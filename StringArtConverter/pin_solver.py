@@ -33,10 +33,10 @@ def convert_image_to_path(
     draw_strength: float = 0.10,
     progress_cb: Optional[Callable[[int], None]] = None,
     use_backgound_removal=False,
-    traget_threshold: float = 0.06,
+    target_threshold: float = 0.06,
     min_delta: float = 1e-4,
-    patience: int = 200,
-    min_steps_to_take: int = 500,
+    patience: int = 300,
+    min_steps_to_take: int = 700,
 ) -> List[Segment]:
     """
     Improved greedy solver:
@@ -50,7 +50,7 @@ def convert_image_to_path(
     if img_bgr is None or img_bgr.size == 0:
         return []
 
-    # Preprocessing
+    # ---------------------- Preprocessing ----------------------
     if (use_backgound_removal):
         img_bgr = remove_background(img_bgr)
 
@@ -60,7 +60,7 @@ def convert_image_to_path(
 
     residual = target.copy()
 
-    # Pins and precomputed masks
+    # ---------------------- Pins and masks ----------------------
     pins = pin_positions_circle(work_size, work_size, n_pins, margin=16)
     H, W = residual.shape
     masks: dict[Tuple[int, int], np.ndarray] = {}
@@ -75,10 +75,9 @@ def convert_image_to_path(
             masks[(i, j)] = m
             lens[(i, j)] = s
 
-    # Greedy selection with hop relaxation
+    # ---------------------- Greedy selection with hop relaxation ----------------------
     path: List[Segment] = []
-    current = 0  # start somewhere deterministic
-    #min_hop_base = max(0, int(min_hop))
+    current = 0  # always start at pin 0
     min_hop_base = max(int(min_hop), n_pins // 8)
     strength = float(np.clip(draw_strength, 0.01, 1.0))
 
@@ -89,12 +88,20 @@ def convert_image_to_path(
     plateau = 0
     error = residual.mean()
 
+    # multi scale scoring params
+    blur_sigma = 0.8               # low-frequency residual
+    hi_w = 0.25                    # weight for high-frequency residual
+    len_penalty = 0.0005           # penalty for very long lines
+    angle_penalty_coeff = 0.03     # discourage repeating the same direction
+    prev_vec = None                # last chosen direction (for angle penalty)
+
+    # ---------------------- main loop ----------------------
     while step_idx < steps:
         best_j, best_score = None, -1.0
         hop_req = min_hop_base
 
-        # check if close enough, then stop early, if min steps reached
-        if error < traget_threshold and step_idx >= min_steps_to_take :
+        # check if good enough, then stop early, if min steps reached
+        if (error < target_threshold) and (step_idx >= min_steps_to_take):
             break
 
         # try with required hop; if no candidate, relax hop until 0
@@ -107,7 +114,24 @@ def convert_image_to_path(
                 if hop < hop_req: continue
 
                 m = masks[(current, j)]
-                s = float((residual * m).sum()) / lens[(current, j)]  # length-normalized
+
+                # multi-scale score
+                score_multi = cv2.GaussianBlur(residual, (0, 0), blur_sigma)
+                hi = residual - score_multi
+                score_val = ((0.8 * score_multi + hi_w * hi) * m).sum()
+                score_val /= (lens[(current, j)] + 1e-6) # normalize
+
+                # length penalty
+                score_val /= (1.0 + len_penalty * lens[(current, j)])
+
+                # angle penalty
+                if prev_vec is not None:
+                    v = pins[j] - pins[current]
+                    a = prev_vec / (np.linalg.norm(prev_vec) + 1e-9)
+                    b = v / (np.linalg.norm(v) + 1e-9)
+                    cos_sim = float(np.clip(np.dot(a, b), -1.0, 1.0))  # 1 = same direction
+                    score_val -= angle_penalty_coeff * cos_sim
+
                 # light cooldown: discourage bouncing to very recent pin
                 cooldown_penalty = 0.02 if (step_idx - recent[j]) < 10 else 0.0
                 s -= cooldown_penalty
@@ -119,36 +143,41 @@ def convert_image_to_path(
                 hop_req -= 1  # relax and retry
 
         if best_j is None:
-            # truly stuck (should be rare); break to avoid infinite loop
+            # truly stuck (should be rare) break to avoid infinite loop
             break
 
-        # update residual where the line is
+        # apply chosen line
         m = masks[(current, best_j)]
-        residual -= strength * m**0.9   # added 0.9 here TODO figure out if nescessary
+        residual -= strength * (m ** 0.9)    # small gamma keeps sub-pixel AA softer
         np.maximum(residual, 0.0, out=residual)  # clamp to [0,1]
 
-        # update error
+        # track direction for next step (for angle penalty)
+        prev_vec = pins[best_j] - pins[current]
+
+        # update error for early stopping
         prev_error = error
         error = residual.mean()
         improvement = prev_error - error
         relative_improvement = improvement / (prev_error + 1e-9)
 
-        if improvement < min_delta and relative_improvement < 0.002:    # 0.2% relative improvement here
+        if (improvement < min_delta) and (relative_improvement < 0.002):    # 0.2% relative improvement here
             plateau += 1
         else:
             plateau = 0
 
         # no meaningful improvement over time
-        if plateau >= patience:
+        if (plateau >= patience) and (step_idx >= min_steps_to_take):
             break
 
+        # commit step to list
         path.append((current, best_j))
         recent[best_j] = step_idx
         current = best_j
         step_idx += 1
 
         if progress_cb:
-            progress_cb(int(100 * step_idx / max(1, steps)))
+            #progress_cb(int(100 * step_idx / max(1, steps)))
+            progress_cb(int(100 * (1.0 - min(1.0, error))))
 
     if progress_cb:
         progress_cb(100)

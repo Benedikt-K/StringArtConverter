@@ -71,25 +71,42 @@ def build_target(gray: np.ndarray, edge_weight: float = 0.65, tone_weight: float
 
 def resize(
     img_bgr: np.ndarray,
-    work_size: int = 512,
+    size: int = 512,
+    mode: str = "cover",        # "cover" center-crops; "contain" pads (your old behavior)
     pad_value: int = 255,
 ) -> np.ndarray:
     """
-    Resize the input image to fit within a square canvas of size (work_size x work_size).
-    Keeps aspect ratio, centers the image, and pads with pad_value (default = white).
-    Returns a new BGR uint8 image.
+    Resize to a square (size x size).
+
+    - mode="cover": scale so the *smaller* side matches `size`, then center-crop the larger side.
+      (fills the square with image pixels; no borders)
+    - mode="contain": scale so the *larger* side matches `size`, then pad with `pad_value`.
+      (keeps whole image visible; may leave borders)
     """
     h0, w0 = img_bgr.shape[:2]
-    scale = work_size / max(h0, w0)
-    new_w, new_h = int(w0 * scale), int(h0 * scale)
+    if mode.lower() == "contain":
+        scale = size / max(h0, w0)
+        new_w, new_h = max(1, int(w0 * scale)), max(1, int(h0 * scale))
+        resized = cv2.resize(img_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        canvas = np.full((size, size, 3), pad_value, dtype=np.uint8)
+        y_off = (size - new_h) // 2
+        x_off = (size - new_w) // 2
+        canvas[y_off:y_off + new_h, x_off:x_off + new_w] = resized
+        return canvas
 
+    # cover: scale so the smaller side fits, then center-crop the bigger side
+    scale = size / min(h0, w0)
+    new_w, new_h = max(1, int(w0 * scale)), max(1, int(h0 * scale))
     resized = cv2.resize(img_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-    canvas = np.full((work_size, work_size, 3), pad_value, dtype=np.uint8)
-    y_off = (work_size - new_h) // 2
-    x_off = (work_size - new_w) // 2
-    canvas[y_off:y_off+new_h, x_off:x_off+new_w] = resized
-    return canvas
+    # center-crop to size x size
+    y_start = max(0, (new_h - size) // 2)
+    x_start = max(0, (new_w - size) // 2)
+    cropped = resized[y_start:y_start + size, x_start:x_start + size]
+    # in rare rounding cases cropped may be off by 1px; enforce exact size
+    if cropped.shape[0] != size or cropped.shape[1] != size:
+        cropped = cv2.resize(cropped, (size, size), interpolation=cv2.INTER_AREA)
+    return cropped
 
 def remove_background(img_bgr: np.ndarray) -> np.ndarray:
     result = rembg_remove(img_bgr)
