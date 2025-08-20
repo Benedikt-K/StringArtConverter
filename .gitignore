@@ -1,0 +1,108 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.dll
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter / IPython
+.ipynb_checkpoints
+*.ipynb
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+*.pytest_cache/
+test-results/
+
+# Logs
+*.log
+
+# ---- Conda ----
+# Environments
+*.conda
+*.yml
+*.yaml
+conda-meta/
+pkgs/
+
+# ---- VS Code ----
+.vscode/
+.history/
+*.code-workspace
+
+# ---- OS ----
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- Project specific ----
+# Model weights / rembg cache
+*.onnx
+~$*
+# u2net downloaded weights (rembg)
+.u2net/
+.u2net_cloth_mask/
+# Local data/output
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tiff
+*.csv
+*.mp4
+*.avi
+*.mkv
+*.mov
+# Avoid committing big test images
+/data/
+output/
+results/
+
+# ---- IDE ----
+.idea/
+*.iml
+*.sublime-workspace
+*.sublime-project

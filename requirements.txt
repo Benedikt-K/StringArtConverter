@@ -1,0 +1,16 @@
+# Core
+numpy>=1.23
+opencv-python>=4.8
+
+# Qt for desktop UI
+PySide6>=6.5
+
+# background removal
+rembg>=2.0.56
+onnxruntime>=1.15
+
+# For CSV export
+pandas>=2.0
+
+# If you want nice plots / testing preview (optional)
+matplotlib>=3.7
