@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Callable, List, Optional, Tuple
 from .preprocessing import resize, to_grayscale, build_target, remove_background, circular_mask
-from .solver import pin_positions_circle, _line_mask
+from .solver import pin_positions_circle, _line_mask, precompute_line_samples
 import math, cv2, numpy as np
 
 Coord = Tuple[int, int]

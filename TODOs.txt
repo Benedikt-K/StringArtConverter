@@ -1,13 +1,11 @@
  solver:
     multi-pass
     other search strategies
-
-preporcessing:
-    greyscale
-    edge detection
-    cropping
-    resizing
+    fix details
+    make faster
 
 UI:
     preview of where circle is gonna be
     size/position options in the image selection
+    progress bar:
+      "draw as the lines are calculated"
