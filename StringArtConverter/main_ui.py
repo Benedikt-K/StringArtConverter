@@ -8,10 +8,11 @@ from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot
 from PySide6.QtGui import QPixmap, QImage, QAction
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton, QFileDialog, QVBoxLayout, QHBoxLayout,
-    QSpinBox, QFormLayout, QProgressBar, QMessageBox
+    QSpinBox, QFormLayout, QProgressBar, QMessageBox, QCheckBox
 )
 
 from .greedy_solver import convert_image_to_path
+from .multi_solver import solve_multi_strings
 from .previewer import simulate_string_art
 from StringArtConverter import preprocessing
 
@@ -28,23 +29,37 @@ class ConvertWorker(QObject):
     finished = Signal(list)   # list[(from_pin, to_pin)]
     errored = Signal(str)
 
-    def __init__(self, img_bgr, n_pins: int, steps: int, min_hop: int):
+    def __init__(self, img_bgr, n_pins: int, steps: int, min_hop: int, use_multi: bool = True, k_strings: int = 3):
         super().__init__()
         self.img_bgr = img_bgr
         self.n_pins = n_pins
         self.steps = steps
         self.min_hop = min_hop
+        self.use_multi = use_multi
+        self.k_strings = k_strings
 
     @Slot()
     def run(self):
         try:
-            path = convert_image_to_path(
-                self.img_bgr,
-                self.n_pins,
-                self.steps,
-                self.min_hop,
-                progress_cb=self.progress.emit,
-            )
+            if self.use_multi:
+                # Use the multi-string solver; it returns (combined_path, per_string_paths)
+                combined, _ = solve_multi_strings(
+                    self.img_bgr,
+                    n_pins=self.n_pins,
+                    steps=self.steps,
+                    k_strings=self.k_strings,
+                    min_hop=self.min_hop,
+                    progress_cb=self.progress.emit,
+                )
+                path = combined
+            else:
+                path = convert_image_to_path(
+                    self.img_bgr,
+                    self.n_pins,
+                    self.steps,
+                    self.min_hop,
+                    progress_cb=self.progress.emit,
+                )
             self.finished.emit(path)
         except Exception as e:
             self.errored.emit(str(e))
@@ -67,20 +82,30 @@ class MainWindow(QMainWindow):
         self.image_label.setStyleSheet("border:1px dashed #888; border-radius:12px; padding:16px;")
 
         form = QFormLayout()
+        # choose number of pins and steps
         self.spin_pins = QSpinBox()
         self.spin_pins.setRange(12, 1024)
         self.spin_pins.setValue(200)
         self.spin_steps = QSpinBox()
         self.spin_steps.setRange(1, 5000)
         self.spin_steps.setValue(1500)
-        self.btn_open = QPushButton("Open Image…")
-        self.btn_convert = QPushButton("Convert to String Art")
-        self.btn_convert.setEnabled(False)
+        # conversion progress bar
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
+        # checkbox for multi solver + how many strings
+        self.chk_multi = QCheckBox("Use multiple strings")
+        self.spin_strings = QSpinBox()
+        self.spin_strings.setRange(2, 12)    
+        self.spin_strings.setValue(3)
+        self.spin_strings.setEnabled(False)   # only enabled when checkbox is checked
+        self.chk_multi.toggled.connect(self.spin_strings.setEnabled)
+        # Buttons
         self.btn_preview = QPushButton("Render Preview")
         self.btn_preview.setEnabled(False)
+        self.btn_open = QPushButton("Open Image…")
+        self.btn_convert = QPushButton("Convert to String Art")
+        self.btn_convert.setEnabled(False)
 
         form.addRow("Pins (circle):", self.spin_pins)
         form.addRow("Steps:", self.spin_steps)
@@ -88,6 +113,8 @@ class MainWindow(QMainWindow):
         form.addRow(self.btn_convert)
         form.addRow("Progress:", self.progress)
         form.addRow(self.btn_preview)
+        form.addRow(self.chk_multi)
+        form.addRow("Strings (K):", self.spin_strings)
 
         right = QWidget(); right.setLayout(form)
         root = QHBoxLayout(central)
@@ -145,12 +172,17 @@ class MainWindow(QMainWindow):
         n_pins = self.spin_pins.value()
         steps = self.spin_steps.value()
         min_hop = max(6, n_pins // 40)
+        use_multi = self.chk_multi.isChecked()
+        k_strings = self.spin_strings.value()
 
         if self._thread:
             self._thread.quit(); self._thread.wait()
 
         self._thread = QThread()
-        self._worker = ConvertWorker(self.img_bgr, n_pins, steps, min_hop)
+        self._worker = ConvertWorker(
+                                    self.img_bgr, n_pins, steps, min_hop, 
+                                    use_multi=use_multi, k_strings=k_strings
+                                    )
         self._worker.moveToThread(self._thread)
 
         self._thread.started.connect(self._worker.run)
