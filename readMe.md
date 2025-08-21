@@ -16,6 +16,7 @@ Turn any image into **string art**: load a photo, preprocess (grayscale, edges, 
 
 ## 🧱 Project Structure
 
+```text
 StringArtConverter/
 ├─ main.py # app entrypoint
 ├─ StringArtConverter/
@@ -27,6 +28,7 @@ StringArtConverter/
 │ └─ init.py
 ├─ requirements.txt
 └─ README.md
+```
 
 ## 🚀 Quick Start
 
