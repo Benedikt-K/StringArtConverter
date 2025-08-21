@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 from typing import Tuple, Iterable
-from .pin_solver import pin_positions_circle
+from .greedy_solver import pin_positions_circle
 
 Color = Tuple[int, int, int]  # RGB
 

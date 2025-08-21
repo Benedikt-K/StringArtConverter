@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QFormLayout, QProgressBar, QMessageBox
 )
 
-from .pin_solver import convert_image_to_path
+from .greedy_solver import convert_image_to_path
 from .previewer import simulate_string_art
 from StringArtConverter import preprocessing
 

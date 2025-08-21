@@ -9,6 +9,7 @@ Turn any image into **string art**: load a photo, preprocess (grayscale, edges, 
 - **Clean desktop UI** (PySide6)  
 - **Preprocessing pipeline**  
 - **Greedy solver**  
+- **Multi-string solver**
 - **Renderer**  
 - **Export**  
 
