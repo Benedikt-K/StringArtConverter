@@ -1,216 +1,233 @@
 from __future__ import annotations
-from typing import Callable, List, Optional, Tuple
-from .preprocessing import resize, to_grayscale, build_target, remove_background, circular_mask
-from .solver import pin_positions_circle, _line_mask, precompute_line_samples
-import math, cv2, numpy as np
+from typing import Callable, Dict, List, Tuple, Optional
+import math
+import cv2
+import numpy as np
 
-Coord = Tuple[int, int]
 Segment = Tuple[int, int]
+
+# -------------------- Simple preprocessing --------------------
+
+def _resize_square(img_bgr: np.ndarray, size: int) -> np.ndarray:
+    return cv2.resize(img_bgr, (size, size), interpolation=cv2.INTER_AREA)
+
+def _to_grayscale(img_bgr: np.ndarray, use_clahe: bool = True) -> np.ndarray:
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    if use_clahe:
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+    return gray
+
+def _build_target(gray_u8: np.ndarray, edge_weight: float = 0.5) -> np.ndarray:
+    """Combine darkness + edges into a residual target in [0,1]."""
+    gray = gray_u8.astype(np.float32) / 255.0
+    darkness = 1.0 - gray
+    med = float(np.median(gray_u8))
+    t1 = int(max(0, 0.66 * med))
+    t2 = int(min(255, 1.33 * med) + 1)
+    edges = cv2.Canny(gray_u8, t1, t2).astype(np.float32) / 255.0
+    target = (1.0 - edge_weight) * darkness + edge_weight * edges
+    return np.clip(target, 0.0, 1.0)
+
+def _circular_mask(h: int, w: int, margin: int = 16) -> np.ndarray:
+    y, x = np.ogrid[:h, :w]
+    cx, cy = w * 0.5, h * 0.5
+    r = min(h, w) * 0.5 - margin
+    mask = ((x - cx) ** 2 + (y - cy) ** 2) <= (r * r)
+    return mask.astype(np.float32)
+
+# -------------------- Pins & line sampling --------------------
+
+def _pin_positions_circle(h: int, w: int, n_pins: int, margin: int = 16) -> np.ndarray:
+    """Nx2 int array of (x,y) pin coords around a circle."""
+    cx, cy = w / 2.0, h / 2.0
+    r = min(h, w) / 2.0 - margin
+    ang = np.linspace(0.0, 2.0 * math.pi, n_pins, endpoint=False)
+    xs = (cx + r * np.cos(ang)).round().astype(np.int32)
+    ys = (cy + r * np.sin(ang)).round().astype(np.int32)
+    return np.stack([xs, ys], axis=1)
+
+def _bresenham_indices(h: int, w: int, x0: int, y0: int, x1: int, y1: int) -> np.ndarray:
+    """Return flat indices (int32) of a 1-px Bresenham line from (x0,y0) to (x1,y1)."""
+    dx = abs(x1 - x0)
+    dy = -abs(y1 - y0)
+    sx = 1 if x0 < x1 else -1
+    sy = 1 if y0 < y1 else -1
+    err = dx + dy
+    x, y = x0, y0
+    xs, ys = [], []
+    while True:
+        if 0 <= x < w and 0 <= y < h:
+            xs.append(x); ys.append(y)
+        if x == x1 and y == y1:
+            break
+        e2 = 2 * err
+        if e2 >= dy:
+            err += dy
+            x += sx
+        if e2 <= dx:
+            err += dx
+            y += sy
+    if not xs:
+        return np.empty(0, dtype=np.int32)
+    return (np.asarray(ys, dtype=np.int32) * w + np.asarray(xs, dtype=np.int32))
+
+# -------------------- Public API used by your UI --------------------
+
+def solve_string_art(
+    img_bgr: np.ndarray,
+    n_pins: int,
+    steps: int,
+    min_hop: int = 6,
+    *,
+    work_size: int = 512,
+    edge_weight: float = 0.5,
+    draw_strength: float = 0.10,
+    target_threshold: float = 0.06,
+    min_steps_to_take: int = 700,
+    candidate_budget: int = 64,
+    blur_sigma: float = 0.8,
+    progress_cb: Optional[Callable[[int], None]] = None,
+) -> Tuple[List[Segment], np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Greedy string-art solver (fast & simple).
+    Returns: (path, residual, target, pins)
+    - progress_cb: optional function receiving 0..100 ints (safe for your QThread signal)
+    """
+    if img_bgr is None or img_bgr.size == 0:
+        return [], np.zeros((work_size, work_size), np.float32), np.zeros((work_size, work_size), np.float32), np.zeros((0,2), np.int32)
+
+    # ---- Preprocess
+    img_bgr = _resize_square(img_bgr, work_size)
+    gray = _to_grayscale(img_bgr, use_clahe=True)
+    target = _build_target(gray, edge_weight=edge_weight)
+
+    mask = _circular_mask(*target.shape, margin=16)
+    target *= mask
+
+    residual = target.astype(np.float32).copy()
+    h, w = residual.shape
+    rflat = residual.ravel()
+
+    pins = _pin_positions_circle(h, w, n_pins, margin=16).astype(np.int32)
+
+    # ---- Candidate ring (~candidate_budget per step)
+    stride = max(1, n_pins // max(1, candidate_budget))
+    ring = list(range(0, n_pins, stride)) or list(range(n_pins))
+    ring_len = len(ring)
+
+    path: List[Segment] = []
+    current = 0
+    error = float(residual.mean())
+    draw_strength = float(np.clip(draw_strength, 0.01, 1.0))
+
+    for step in range(steps):
+        if progress_cb:
+            # progress by error reduction (feels better than linear time)
+            progress_cb(int(100 * (1.0 - min(1.0, error))))
+
+        if (error < target_threshold) and (step >= min_steps_to_take):
+            break
+
+        # Multi-scale once per step
+        low = cv2.GaussianBlur(residual, (0, 0), blur_sigma)
+        hi = residual - low
+        score_field = 0.8 * low + 0.2 * hi
+        sflat = score_field.ravel()
+
+        best_j, best_score = None, -1e9
+
+        # rotate candidate ring around the current pin
+        start = current % ring_len
+        candidates = ring[start:] + ring[:start]
+
+        # 1) try with hop constraint
+        for j in candidates:
+            if j == current:
+                continue
+            hop = abs(j - current); hop = min(hop, n_pins - hop)
+            if hop < min_hop:
+                continue
+            x0, y0 = int(pins[current, 0]), int(pins[current, 1])
+            x1, y1 = int(pins[j, 0]), int(pins[j, 1])
+            idx = _bresenham_indices(h, w, x0, y0, x1, y1)
+            L = idx.size
+            if L == 0:
+                continue
+            score = float(sflat[idx].sum()) / (L + 1e-6)
+            if score > best_score:
+                best_score, best_j = score, j
+
+        # 2) if nothing found, relax hop and check all
+        if best_j is None:
+            for j in range(n_pins):
+                if j == current:
+                    continue
+                x0, y0 = int(pins[current, 0]), int(pins[current, 1])
+                x1, y1 = int(pins[j, 0]), int(pins[j, 1])
+                idx = _bresenham_indices(h, w, x0, y0, x1, y1)
+                L = idx.size
+                if L == 0:
+                    continue
+                score = float(sflat[idx].sum()) / (L + 1e-6)
+                if score > best_score:
+                    best_score, best_j = score, j
+
+        if best_j is None:
+            break  # stuck
+
+        # Apply chosen line
+        x0, y0 = int(pins[current, 0]), int(pins[current, 1])
+        x1, y1 = int(pins[best_j, 0]), int(pins[best_j, 1])
+        idx = _bresenham_indices(h, w, x0, y0, x1, y1)
+        L = idx.size
+        line_mean = float(rflat[idx].sum()) / (L + 1e-6)
+        ink = draw_strength * (0.5 + 0.5 * line_mean)
+
+        rflat[idx] -= ink
+        np.maximum(residual, 0.0, out=residual)  # clamp
+
+        path.append((current, best_j))
+        current = best_j
+        error = float(residual.mean())
+
+    if progress_cb:
+        progress_cb(100)
+    return path, residual, target, pins
 
 def convert_image_to_path(
     img_bgr: np.ndarray,
     n_pins: int,
     steps: int,
     min_hop: int = 6,
+    *,
     work_size: int = 512,
-    edge_weight: float = 0.65,
+    edge_weight: float = 0.5,
     draw_strength: float = 0.10,
     progress_cb: Optional[Callable[[int], None]] = None,
-    use_backgound_removal=False,
-    target_threshold: float = 0.06,
-    min_delta: float = 1e-4,
-    patience: int = 300,
-    min_steps_to_take: int = 700,
 ) -> List[Segment]:
     """
-    Improved greedy solver:
-      - works on a square canvas (work_size x work_size)
-      - target = 0.6*dark + 0.4*edges (tunable via edge_weight)
-      - per-line AA masks; length-normalized scores; residual clamped to [0,1]
-      - relaxes hop if no candidates so it reaches 'steps'
-    Returns a list of (from_pin, to_pin) pin indices.
+    Thin wrapper your worker expects: returns only the path.
     """
-    print("Converting...")
-    if img_bgr is None or img_bgr.size == 0:
-        return []
-
-    # ---------------------- Preprocessing ----------------------
-    if (use_backgound_removal):
-        img_bgr = remove_background(img_bgr)
-
-    img_bgr = resize(img_bgr, size=work_size)
-    gray = to_grayscale(img_bgr, use_clahe=True)
-    target = build_target(gray, edge_weight=edge_weight)
-
-    # apply circular mask, so only inside the circle matters
-    board_mask = circular_mask(*target.shape, margin=16)
-    target *= board_mask
-
-    residual = target.copy()
-
-    # ---------------------- Pins and masks ----------------------
-    pins = pin_positions_circle(work_size, work_size, n_pins, margin=16)
-    H, W = residual.shape
-    masks: dict[Tuple[int, int], np.ndarray] = {}
-    lens: dict[Tuple[int, int], float] = {}
-
-    for i in range(n_pins):
-        for j in range(n_pins):
-            if i == j: continue
-            p0, p1 = pins[i], pins[j]
-            m = _line_mask((H, W), (int(p0[0]), int(p0[1])), (int(p1[0]), int(p1[1])), thickness=1)
-            s = float(m.sum()) + 1e-6
-            masks[(i, j)] = m
-            lens[(i, j)] = s
-
-    # ---------------------- init candidates ----------------------
-    stride = max(1, n_pins // 64)    # ~64 candidates per step
-    base = list(range(0, n_pins, stride))
-    cand_lists = [(base[i % len(base):] + base[:i % len(base)]) for i in range(n_pins)]
-    MAX_CANDS = 64
-
-    # ---------------------- Greedy selection with hop relaxation ----------------------
-    path: List[Segment] = []
-    current = 0  # always start at pin 0
-    min_hop_base = max(int(min_hop), n_pins // 8)
-    strength = float(np.clip(draw_strength, 0.01, 1.0))
-
-    recent = [-9999] * n_pins  # for optional mild cooldown
-    step_idx = 0
-
-    # plateau initialization
-    plateau = 0
-    error = residual.mean()
-
-    # multi scale scoring params
-    blur_sigma = 0.8               # low-frequency residual
-    hi_w = 0.25                    # weight for high-frequency residual
-    len_penalty = 0.0005           # penalty for very long lines
-    angle_penalty_coeff = 0.03     # discourage repeating the same direction
-    prev_vec = None                # last chosen direction (for angle penalty)
-    
-    # prevent going back to the same pin
-    prev_pin = None
-
-    # ---------------------- main loop ----------------------
-    while step_idx < steps:
-        best_j, best_score = None, -1.0
-        hop_req = min_hop_base
-
-        # check if good enough, then stop early, if min steps reached
-        if (error < target_threshold) and (step_idx >= min_steps_to_take):
-            break
-
-        # try with required hop; if no candidate, relax hop until 0
-        while best_j is None and hop_req >= 0:
-            for j in range(n_pins):
-                if j == current: 
-                    continue
-
-                # no immediate backtrack
-                if prev_pin is not None and j == prev_pin:
-                    continue
-
-                # circular hop distance
-                hop = abs(j - current)
-                hop = min(hop, n_pins - hop)
-                if hop < hop_req: continue
-
-                m = masks[(current, j)]
-
-                """
-                # candidate selection for speedup and aviod local "grazing"
-                candidates = []
-                for j in cand_lists[current]:
-                    if j == current:
-                        continue
-                    hop = abs(j - current); hop = min(hop, n_pins - hop)
-                    if hop < hop_req:
-                        continue
-                    # optional quick angle gate vs. previous vector
-                    if prev_vec is not None:
-                        v = pins[j] - pins[current]
-                        a = prev_vec / (np.linalg.norm(prev_vec) + 1e-9)
-                        b = v / (np.linalg.norm(v) + 1e-9)
-                        if float(np.dot(a, b)) > 0.97:  # nearly parallel; skip
-                            continue
-                    candidates.append(j)
-                    if len(candidates) >= MAX_CANDS:
-                        break
-
-                if not candidates:  # fallback
-                    candidates = [j for j in range(n_pins) if j != current]
-                """
-
-                # multi-scale score
-                score_multi = cv2.GaussianBlur(residual, (0, 0), blur_sigma)
-                hi = residual - score_multi
-                score_val = ((0.8 * score_multi + hi_w * hi) * m).sum()
-
-                # normalize and length penalty
-                score_val /= (lens[(current, j)] + 1e-6) 
-                score_val /= (1.0 + len_penalty * lens[(current, j)])
-
-                # angle penalty
-                if prev_vec is not None:
-                    v = pins[j] - pins[current]
-                    a = prev_vec / (np.linalg.norm(prev_vec) + 1e-9)
-                    b = v / (np.linalg.norm(v) + 1e-9)
-                    cos_sim = float(np.clip(np.dot(a, b), -1.0, 1.0))  # 1 = same direction
-                    score_val -= angle_penalty_coeff * cos_sim
-
-                # light cooldown: discourage bouncing to very recent pin
-                if (step_idx - recent[j]) < 10:
-                    score_val -= 0.02
-
-                if score_val > best_score:
-                    best_score, best_j = score_val, j
-
-            if best_j is None:
-                hop_req -= 1  # relax and retry
-
-        if best_j is None:
-            # truly stuck (should be rare) break to avoid infinite loop
-            break
-
-        # apply chosen line
-        m = masks[(current, best_j)]
-        line_mean = float((residual * m).sum() / lens[(current, best_j)] + 1e-6)
-
-        # adaptive "ink"
-        ink = strength * (0.5 + 0.5 * line_mean)
-        residual -= ink * m   
-        np.maximum(residual, 0.0, out=residual)
-
-        # track for next step 
-        prev_vec = pins[best_j] - pins[current]
-        prev_pin = current
-
-        # update error for early stopping
-        prev_error = error
-        error = residual.mean()
-        improvement = prev_error - error
-        relative_improvement = improvement / (prev_error + 1e-9)
-
-        if (improvement < min_delta) and (relative_improvement < 0.002):    # 0.2% relative improvement here
-            plateau += 1
-        else:
-            plateau = 0
-
-        # no meaningful improvement over time
-        if (plateau >= patience) and (step_idx >= min_steps_to_take):
-            break
-
-        # commit step to list
-        path.append((current, best_j))
-        recent[best_j] = step_idx
-        current = best_j
-        step_idx += 1
-
-        if progress_cb:
-            #progress_cb(int(100 * step_idx / max(1, steps)))
-            progress_cb(int(100 * (1.0 - min(1.0, error))))
-
-    if progress_cb:
-        progress_cb(100)
+    path, _, _, _ = solve_string_art(
+        img_bgr=img_bgr,
+        n_pins=n_pins,
+        steps=steps,
+        min_hop=min_hop,
+        work_size=work_size,
+        edge_weight=edge_weight,
+        draw_strength=draw_strength,
+        progress_cb=progress_cb,
+    )
     return path
+
+def render_path(work_size: int, pins: np.ndarray, path: List[Segment], thickness: int = 1) -> np.ndarray:
+    """
+    Render the path as white AA lines on black (grayscale uint8); handy for previews.
+    """
+    canvas = np.zeros((work_size, work_size), dtype=np.uint8)
+    for a, b in path:
+        x0, y0 = int(pins[a, 0]), int(pins[a, 1])
+        x1, y1 = int(pins[b, 0]), int(pins[b, 1])
+        cv2.line(canvas, (x0, y0), (x1, y1), 255, thickness=thickness, lineType=cv2.LINE_AA)
+    return canvas

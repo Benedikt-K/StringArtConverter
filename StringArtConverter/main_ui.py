@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QFormLayout, QProgressBar, QMessageBox, QCheckBox
 )
 
+from .greedy_solver import solve_string_art, render_path
 from .greedy_solver import convert_image_to_path
 from .multi_solver import solve_multi_strings
 from .previewer import simulate_string_art
