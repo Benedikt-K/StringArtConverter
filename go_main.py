@@ -1,8 +1,15 @@
-# go_main.py  (Go-algorithm faithful port, with CLI + preview)
 from __future__ import annotations
 from typing import List, Tuple, Optional
 import argparse, math
 import cv2, numpy as np
+
+# check for rembg, so code always runs
+try:
+    from rembg import remove as rembg_remove
+    _HAS_REMBG = True
+except Exception:
+    _HAS_REMBG = False
+
 
 Segment = Tuple[int, int]
 
@@ -48,6 +55,11 @@ def build_brightness_for_go_solver(
     edge_low: int,
     edge_high: int,
     edge_auto_sigma: float,
+    # NEW:
+    use_rembg: bool,
+    rembg_dim: float,
+    rembg_feather: int,
+    rembg_erode: int,
 ) -> np.ndarray:
     """
     Returns uint8 brightness image (H,W) where 0=black, 255=white.
@@ -56,6 +68,16 @@ def build_brightness_for_go_solver(
     so dark/edgey areas become low brightness → high error (255 - src).
     """
     img = resize_square(img_bgr, work_size)
+
+     # --- semantic background dim (optional) ---
+    if use_rembg and rembg_dim > 0.0:
+        img = rembg_dim_background(
+            img,
+            dim_factor=rembg_dim,
+            feather_px=int(rembg_feather),
+            erode_px=int(rembg_erode),
+        )
+
     gray = to_gray_u8(img)
 
     if use_clahe:
@@ -77,6 +99,49 @@ def build_brightness_for_go_solver(
     # convert back to Go-style brightness
     src = (255.0 * (1.0 - target_dark)).astype(np.uint8)
     return src
+
+def rembg_dim_background(
+    img_bgr: np.ndarray,
+    *,
+    dim_factor: float = 0.5,     # 0=no change, 1=completely black bg
+    feather_px: int = 6,         # soften mask edges
+    erode_px: int = 0            # shrink foreground mask (optional)
+) -> np.ndarray:
+    """
+    Use rembg to get a foreground alpha; darken ONLY the background by dim_factor.
+    Returns a BGR image with a darker bg, same size as input.
+
+    If rembg is unavailable, returns the original image unchanged.
+    """
+    if not _HAS_REMBG or dim_factor <= 0.0:
+        print("rembg not found")
+        return img_bgr
+
+    print("darkening backgound")
+    # rembg expects RGB bytes; returns RGBA with alpha=foreground
+    rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+    out = rembg_remove(rgb)          # np.ndarray HxWx4 (uint8) or HxWx3 if trimmed
+    if out.ndim == 3 and out.shape[2] == 4:
+        alpha = out[:, :, 3]
+    else:
+        # Fallback: if no alpha came back, do nothing
+        return img_bgr
+
+    # Make a clean, feathered background mask (1 = background, 0 = foreground)
+    fg = (alpha.astype(np.float32) / 255.0)
+    if erode_px > 0:
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erode_px*2+1, erode_px*2+1))
+        fg = cv2.erode((fg*255).astype(np.uint8), k, iterations=1).astype(np.float32)/255.0
+    bg_mask = 1.0 - fg
+    if feather_px > 0:
+        bg_mask = cv2.GaussianBlur(bg_mask, (0,0), feather_px)
+
+    # Darken background only: img_bg = img*(1 - dim*bg_mask)
+    bg_mask = bg_mask[..., None]       # HxWx1
+    dim = np.clip(float(dim_factor), 0.0, 1.0)
+    scale = 1.0 - dim * bg_mask        # HxWx1 per-pixel factor in [1-dim,1]
+    out_bgr = (img_bgr.astype(np.float32) * scale).clip(0,255).astype(np.uint8)
+    return out_bgr
 
 # -------------------- Pin + Line Precomputation --------------------
 
@@ -234,6 +299,10 @@ def main():
     ap.add_argument("--pp_contrast", action="store_true", help="Percentile contrast stretch")
     ap.add_argument("--pp_c_low", type=float, default=2.0, help="Contrast low percentile (0..50)")
     ap.add_argument("--pp_c_high", type=float, default=98.0, help="Contrast high percentile (50..100)")
+    ap.add_argument("--pp_rembg", action="store_true", help="Use rembg to get a foreground mask and darken background")
+    ap.add_argument("--pp_rembg_dim", type=float, default=0.45, help="How much to darken the background (0..1)")
+    ap.add_argument("--pp_rembg_feather", type=int, default=6, help="Feather (Gaussian sigma in px) for bg mask edges")
+    ap.add_argument("--pp_rembg_erode", type=int, default=1, help="Erode foreground mask in px to reduce hair halos")
 
     ap.add_argument("--pp_edges", action="store_true", help="Add Canny edges to the target (blended)")
     ap.add_argument("--pp_edge_weight", type=float, default=0.35, help="Blend weight for edges (0..1)")
@@ -262,6 +331,10 @@ def main():
         edge_low=args.pp_edge_low,
         edge_high=args.pp_edge_high,
         edge_auto_sigma=args.pp_edge_auto_sigma,
+        use_rembg=args.pp_rembg,
+        rembg_dim=args.pp_rembg_dim,
+        rembg_feather=args.pp_rembg_feather,
+        rembg_erode=args.pp_rembg_erode,
     )
     # Flatten to match the Go logic (row-major)
     H = W = args.work_size
