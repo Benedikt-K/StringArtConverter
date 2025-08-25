@@ -6,14 +6,14 @@ UI:
     preview of where circle is gonna be
     size/position options in the image selection
     progress bar:
-      "draw as the lines are calculated"
+        "draw as the lines are calculated"
     select parameters over sliders, standart on the left, "off" as initial left value = 0
     explain each parameter shortly
 
 other:
-  split everything again in files
-  add explanation in window
-  add options:
-    save path
-    load path
-    select saved path, give instructions for reproducing irl
+    split everything again in files
+    add explanation in window
+    add options:
+        save path
+        load path
+        select saved path, give instructions for reproducing irl

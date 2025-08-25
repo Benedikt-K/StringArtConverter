@@ -55,11 +55,13 @@ def build_brightness_for_go_solver(
     edge_low: int,
     edge_high: int,
     edge_auto_sigma: float,
-    # NEW:
     use_rembg: bool,
     rembg_dim: float,
     rembg_feather: int,
     rembg_erode: int,
+    #NEW
+    pp_gamma: float,
+    pp_clip_high: float,
 ) -> np.ndarray:
     """
     Returns uint8 brightness image (H,W) where 0=black, 255=white.
@@ -85,6 +87,13 @@ def build_brightness_for_go_solver(
 
     if use_contrast:
         gray = contrast_stretch(gray, p_low=p_low, p_high=p_high)
+
+    # high exposure correction
+    if pp_gamma != 1.0:
+        gray = apply_gamma(gray, pp_gamma)
+
+    if pp_clip_high < 100.0:
+        gray = brightness_clip(gray, clip_high=pp_clip_high)
 
     gray_f = gray.astype(np.float32) / 255.0
     darkness = 1.0 - gray_f  # 1 = needs thread
@@ -142,6 +151,20 @@ def rembg_dim_background(
     scale = 1.0 - dim * bg_mask        # HxWx1 per-pixel factor in [1-dim,1]
     out_bgr = (img_bgr.astype(np.float32) * scale).clip(0,255).astype(np.uint8)
     return out_bgr
+
+def apply_gamma(gray_u8: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+    if abs(gamma - 1.0) < 1e-6:
+        return gray_u8
+    g = gray_u8.astype(np.float32) / 255.0
+    g = np.power(g, gamma)
+    return (g * 255.0 + 0.5).astype(np.uint8)
+
+def brightness_clip(gray_u8: np.ndarray, clip_high: float = 98.0) -> np.ndarray:
+    hi = np.percentile(gray_u8, clip_high)
+    if hi <= 1:
+        return gray_u8
+    g = np.clip(gray_u8.astype(np.float32) / hi, 0, 1)
+    return (g * 255.0 + 0.5).astype(np.uint8)
 
 # -------------------- Pin + Line Precomputation --------------------
 
@@ -303,6 +326,8 @@ def main():
     ap.add_argument("--pp_rembg_dim", type=float, default=0.45, help="How much to darken the background (0..1)")
     ap.add_argument("--pp_rembg_feather", type=int, default=6, help="Feather (Gaussian sigma in px) for bg mask edges")
     ap.add_argument("--pp_rembg_erode", type=int, default=1, help="Erode foreground mask in px to reduce hair halos")
+    ap.add_argument("--pp_gamma", type=float, default=1.0, help="Gamma correction before inversion ( <1 = brighten, >1 = darken highlights )")
+    ap.add_argument("--pp_clip_high", type=float, default=100.0, help="Percentile high clipping for brightness (e.g. 95 = ignore brightest 5%)")
 
     ap.add_argument("--pp_edges", action="store_true", help="Add Canny edges to the target (blended)")
     ap.add_argument("--pp_edge_weight", type=float, default=0.35, help="Blend weight for edges (0..1)")
@@ -335,6 +360,8 @@ def main():
         rembg_dim=args.pp_rembg_dim,
         rembg_feather=args.pp_rembg_feather,
         rembg_erode=args.pp_rembg_erode,
+        pp_gamma=args.pp_gamma,
+        pp_clip_high=args.pp_clip_high,
     )
     # Flatten to match the Go logic (row-major)
     H = W = args.work_size
