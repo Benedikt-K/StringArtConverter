@@ -100,9 +100,12 @@ $RECYCLE.BIN/
 /data/
 output/
 results/
+# output
+path.txt
 
 # ---- IDE ----
 .idea/
 *.iml
 *.sublime-workspace
 *.sublime-project
+

@@ -111,7 +111,7 @@ def precalc_lines(pins: np.ndarray, n_pins: int, size: int, min_distance: int):
 # -------------------- Core Solver --------------------
 
 def solve_string_art_go(
-    img_bgr: np.ndarray,
+    source_brightness_u8: np.ndarray,   # <-- preprocessed brightness (0..255), 2D or flat
     n_pins: int,
     max_lines: int,
     *,
@@ -122,15 +122,17 @@ def solve_string_art_go(
     progress_cb: Optional[callable] = None,
 ) -> Tuple[List[Segment], np.ndarray, np.ndarray, np.ndarray]:
 
-    # Resize + grayscale target
-    img_bgr = cv2.resize(img_bgr, (work_size, work_size), interpolation=cv2.INTER_AREA)
-    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    # Ensure shape = (H,W)
+    if source_brightness_u8.ndim == 1:
+        gray = source_brightness_u8.reshape(work_size, work_size).astype(np.float32)
+    else:
+        gray = source_brightness_u8.astype(np.float32)
 
     H, W = gray.shape
     pins = pin_positions_circle(work_size, n_pins)
     line_cache = precalc_lines(pins, n_pins, work_size, min_distance)
 
-    # error array = 255 - brightness
+    # Go logic: error starts as (255 - brightness)
     error = 255.0 - gray.ravel()
 
     path: List[Segment] = []
@@ -150,8 +152,9 @@ def solve_string_art_go(
             if test_pin in last_pins:
                 continue
             idx = line_cache.get((current_pin, test_pin))
-            if idx is None: 
+            if idx is None:
                 continue
+
             line_err = error[idx].sum()
             if line_err > best_err:
                 best_err = line_err
@@ -161,8 +164,8 @@ def solve_string_art_go(
         if best_pin is None:
             break
 
-        # Apply line weight (subtract error)
-        error[best_idx] -= line_weight
+        # Apply line: subtract constant LINE_WEIGHT along the pixels
+        error[best_idx] -= float(line_weight)
         np.maximum(error, 0.0, out=error)
 
         path.append((current_pin, best_pin))
@@ -172,6 +175,8 @@ def solve_string_art_go(
 
     if progress_cb:
         progress_cb(100)
+
+    # Return: path, final error map, the brightness target we used, and pins
     return path, error.reshape(H, W), gray, pins
 
 # -------------------- Rendering --------------------
@@ -244,8 +249,27 @@ def main():
     def progress(p: int):
         print(f"\rProgress: {p:3d}%", end="", flush=True)
 
-    path, error, target, pins = solve_string_art_go(
+    # preprocessing
+    src_u8 = build_brightness_for_go_solver(
         img_bgr=img,
+        work_size=args.work_size,
+        use_clahe=args.pp_clahe,
+        use_contrast=args.pp_contrast,
+        p_low=args.pp_c_low,
+        p_high=args.pp_c_high,
+        use_edges=args.pp_edges,
+        edge_weight=args.pp_edge_weight,
+        edge_low=args.pp_edge_low,
+        edge_high=args.pp_edge_high,
+        edge_auto_sigma=args.pp_edge_auto_sigma,
+    )
+    # Flatten to match the Go logic (row-major)
+    H = W = args.work_size
+    SourceImg = src_u8.reshape(H * W).astype(np.float64)
+
+    # find path
+    path, error, target, pins = solve_string_art_go(
+        source_brightness_u8=src_u8,
         n_pins=args.pins,
         max_lines=args.steps,
         min_distance=args.min_distance,
@@ -260,7 +284,12 @@ def main():
     print(f"Saved {len(path)} segments to {args.out}")
 
     if args.preview:
-        preview = render_path(args.work_size, pins, path, thickness=1)
+        preview = render_path(
+            args.work_size, pins, path,
+            alpha_per_line=args.render_alpha,
+            gamma=args.render_gamma,
+            thickness=args.line_thickness
+        )
         cv2.imwrite(args.preview, preview)
         print(f"Saved preview to {args.preview}")
 
