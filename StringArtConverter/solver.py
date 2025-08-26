@@ -1,8 +1,7 @@
 from typing import List, Optional, Tuple
 import math, numpy as np
 
-
-Segment = Tuple[int, int]
+from StringArtConverter.utils import Segment
 
 # -------------------- Pin + Line Precomputation --------------------
 

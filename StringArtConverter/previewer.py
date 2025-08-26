@@ -1,8 +1,8 @@
 import numpy as np
 import cv2
-from typing import Tuple, List
+from typing import Tuple
 
-Segment = Tuple[int, int]
+from StringArtConverter.utils import Segment
 
 def render_path(work_size, 
                 pins, 

@@ -1,5 +1,6 @@
 from typing import Tuple, List
 
+# def Segment
 Segment = Tuple[int, int]
 
 def save_path_txt(path: List[Segment], out_txt: str) -> None:
