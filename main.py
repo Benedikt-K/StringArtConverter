@@ -73,8 +73,8 @@ class ConvertWorker(QObject):
                 rembg_feather=self.params["pp_rembg_feather"],
                 rembg_erode=self.params["pp_rembg_erode"],
                 # optional: gamma + clipping if you added in your go_main:
-                # pp_gamma=self.params.get("pp_gamma", 1.0),
-                # pp_clip_high=self.params.get("pp_clip_high", 100.0),
+                pp_gamma=self.params.get("pp_gamma", 1.0),
+                pp_clip_high=self.params.get("pp_clip_high", 100.0),
             )
 
             def cb(p: int):
