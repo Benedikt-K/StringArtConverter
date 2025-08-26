@@ -3,18 +3,19 @@ from typing import List, Optional
 import sys, math
 import cv2
 import numpy as np
+import json, os
 
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
 from PySide6.QtGui import QAction, QPixmap, QImage, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QFileDialog,
     QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame
+    QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout
 )
 
 # -------- solver imports --------
 from StringArtConverter.preprocessing import build_brightness_for_go_solver
-from StringArtConverter.utils import save_path_txt, Segment
+from StringArtConverter.utils import save_path_txt, set_widget_ranges, load_presets_json, clamp_to_ranges, apply_to_widgets, collect_from_widgets, Segment
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art_go
 
@@ -259,6 +260,14 @@ class MainWindow(QMainWindow):
         title.setObjectName("TitleLabel")
         right_layout.addWidget(title)
 
+        self.combo_preset = QComboBox()
+        self.combo_preset.setObjectName("comboPreset")
+        self.combo_preset.addItem("— None —")  # will be populated after widgets exist
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Preset:"))
+        row.addWidget(self.combo_preset, 1)
+        right_layout.addLayout(row)
+
         right_layout.addWidget(self._group_source())
         right_layout.addWidget(self._group_solver())
         right_layout.addWidget(self._group_preview())
@@ -287,6 +296,11 @@ class MainWindow(QMainWindow):
         main.addWidget(self.image_label, 2)
         main.addWidget(scroll, 1)
         self.setCentralWidget(root)
+
+        # connect presets
+        self._build_wmap()
+        self._load_presets_json()           # load ranges + defaults + presets
+        self.combo_preset.currentIndexChanged.connect(self._on_preset_changed)
 
     def _group_source(self) -> QGroupBox:
         g = QGroupBox("Image / Preprocessing")
@@ -535,6 +549,75 @@ class MainWindow(QMainWindow):
             info(self, "Saved", f"Coordinates saved to:\n{path}")
         except Exception as e:
             error(self, "Save failed", str(e))
+
+    # ── import jsons ──────────────────────────────────────────────────────────────
+    def _build_wmap(self):
+        """Map parameter keys <-> widgets (must match your utils/json keys)."""
+        self.wmap = {
+            # core / solver
+            "work_size":         self.spin_work,
+            "pins":              self.spin_pins,
+            "steps":             self.spin_steps,
+            "min_distance":      self.spin_min_dist,
+            "line_weight":       self.dsp_line_weight,
+            "last_n":            self.spin_lastn,
+
+            # preview
+            "render_alpha":      self.dsp_alpha,
+            "render_gamma":      self.dsp_gamma,
+            "line_thickness":    self.spin_thick,
+
+            # preprocessing
+            "pp_clahe":          self.chk_clahe,
+            "pp_contrast":       self.chk_contrast,
+            "pp_c_low":          self.dsp_low,
+            "pp_c_high":         self.dsp_high,
+            "pp_edges":          self.chk_edges,
+            "pp_edge_weight":    self.dsp_edge_weight,
+            # you currently keep auto thresholds:
+            # "pp_edge_low":     <no widget>,
+            # "pp_edge_high":    <no widget>,
+            # "pp_edge_auto_sigma": <constant in gather_params>,
+
+            "pp_rembg":          self.chk_rembg,
+            "pp_rembg_dim":      self.dsp_rembg_dim,
+            "pp_rembg_feather":  self.spin_rembg_feather,
+            "pp_rembg_erode":    self.spin_rembg_erode,
+        }
+
+    def _load_presets_json(self):
+        """Read settings.json, populate ranges, defaults, and preset list."""
+        # 1) load file
+        cfg_path = os.path.join(os.path.dirname(__file__) + "\\StringArtConverter", "settings.json")
+        self._cfg = load_presets_json(cfg_path)  # {ranges, defaults, presets}
+
+        # 2) apply ranges to widgets
+        set_widget_ranges(self._cfg.get("ranges", {}), self.wmap)
+
+        # 3) apply defaults
+        defaults = clamp_to_ranges(self._cfg.get("defaults", {}), self._cfg.get("ranges", {}))
+        apply_to_widgets(defaults, self.wmap)
+
+        # 4) fill preset combo
+        self.combo_preset.blockSignals(True)
+        self.combo_preset.clear()
+        self.combo_preset.addItem("— None —")
+        for p in self._cfg.get("presets", []):
+            self.combo_preset.addItem(p.get("name", "Untitled"))
+        self.combo_preset.blockSignals(False)
+
+    def _on_preset_changed(self, idx: int):
+        """Apply a named preset (defaults merged with preset params)."""
+        if idx <= 0:
+            # back to defaults
+            defaults = clamp_to_ranges(self._cfg.get("defaults", {}), self._cfg.get("ranges", {}))
+            apply_to_widgets(defaults, self.wmap)
+            return
+        preset = self._cfg["presets"][idx - 1]
+        params = dict(self._cfg.get("defaults", {}))
+        params.update(preset.get("params", {}))
+        params = clamp_to_ranges(params, self._cfg.get("ranges", {}))
+        apply_to_widgets(params, self.wmap)
 
 
 def main():
