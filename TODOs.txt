@@ -7,6 +7,7 @@
 
 automatization:
     maybe add some mechanism to detect what params are needed for best result
+    --> make presets
 
 UI:
     preview of where circle is gonna be
@@ -17,7 +18,6 @@ UI:
     explain each parameter shortly
 
 other:
-    split everything again in files
     add explanation in window
     add options:
         save path

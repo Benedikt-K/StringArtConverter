@@ -3,7 +3,7 @@ from typing import List, Optional
 import sys, math
 import cv2
 import numpy as np
-import json, os
+import os
 
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
 from PySide6.QtGui import QAction, QPixmap, QImage, QIcon
@@ -15,7 +15,8 @@ from PySide6.QtWidgets import (
 
 # -------- solver imports --------
 from StringArtConverter.preprocessing import build_brightness_for_go_solver
-from StringArtConverter.utils import save_path_txt, set_widget_ranges, load_presets_json, clamp_to_ranges, apply_to_widgets, collect_from_widgets, Segment
+from StringArtConverter.utils import save_path_txt, load_presets_json, clamp_to_ranges, Segment
+from StringArtConverter.ui_utils import apply_to_widgets, collect_from_widgets, set_widget_ranges
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art_go
 

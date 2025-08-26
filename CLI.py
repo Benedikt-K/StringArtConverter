@@ -1,11 +1,12 @@
 from __future__ import annotations
 import argparse
 import cv2, numpy as np
+from typing import Tuple, List
 
 from StringArtConverter.preprocessing import build_brightness_for_go_solver
-from StringArtConverter.utils import save_path_txt
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art_go
+from StringArtConverter.utils import save_path_txt
 
 # -------------------- CLI --------------------
 def main():
