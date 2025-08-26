@@ -55,8 +55,11 @@ def rembg_dim_background(
 
     If rembg is unavailable, returns the original image unchanged.
     """
-    if not _HAS_REMBG or dim_factor <= 0.0:
+    if not _HAS_REMBG:
         print("rembg not found")
+        return img_bgr
+    
+    if (dim_factor <= 0.0):
         return img_bgr
 
     print("darkening backgound")

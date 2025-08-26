@@ -1,6 +1,6 @@
 from __future__ import annotations
-from typing import List, Tuple, Optional
-import os, sys, math
+from typing import List, Optional
+import sys, math
 import cv2
 import numpy as np
 
@@ -143,7 +143,7 @@ QLabel, QCheckBox, QSpinBox, QDoubleSpinBox {
     font-size: 13px;
 }
 
-/* Sliders (optional nice look) */
+/* Sliders */
 QSlider::groove:horizontal {
     border: 1px solid #2b2f36;
     height: 6px;
@@ -186,13 +186,36 @@ QProgressBar::chunk {
     background: #1f6feb;
     border-radius: 8px;
 }
+
+/* primary CTA button */
+QPushButton#btn_convert {
+    background-color: #1f6feb;
+    color: #ffffff;
+    border: 1px solid #2b2f36;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-weight: 600;
+}
+QPushButton#btn_convert:disabled {
+    background-color: #334155;
+    color: #9aa4ad;
+}
 """
+
+# --------------- clickable label for upload ----------------------------
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(e)
 
 # ── main window ──────────────────────────────────────────────────────────────
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("String Art (Go-style) — GUI")
+        self.setWindowTitle("String Art — GUI")
         self.resize(1500, 900)
         self.setStyleSheet(APP_STYLES)
 
@@ -217,11 +240,13 @@ class MainWindow(QMainWindow):
         main.setSpacing(14)
 
         # Left: image preview
-        self.image_label = QLabel("Drop an image here or use File → Open…")
+        self.image_label = ClickableLabel("Drop an image here or use File → Open…")
         self.image_label.setObjectName("HintLabel")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setMinimumSize(680, 480)
-        self.image_label.setStyleSheet("border: 1px dashed #2b2f36; border-radius: 12px; padding: 16px;")
+        self.image_label.setStyleSheet("border:1px dashed #888; border-radius:12px; padding:16px;")
+        self.image_label.setCursor(Qt.PointingHandCursor)   # nice UX hint
+        self.image_label.clicked.connect(self.open_image)
 
         # Right: controls (scrollable)
         right_panel = QWidget()
@@ -241,6 +266,7 @@ class MainWindow(QMainWindow):
         # Run row
         run_row = QHBoxLayout()
         self.btn_convert = QPushButton("Start Conversion")
+        self.btn_convert.setObjectName("btn_convert")
         self.btn_convert.clicked.connect(self.start_conversion)
         self.btn_convert.setEnabled(False)
         self.progress = QProgressBar()
@@ -277,8 +303,8 @@ class MainWindow(QMainWindow):
 
         # Contrast stretch
         self.chk_contrast = QCheckBox("Contrast stretch (percentiles)")
-        self.dsp_low = QDoubleSpinBox(); self.dsp_low.setRange(0, 50); self.dsp_low.setDecimals(1); self.dsp_low.setValue(2.0)
-        self.dsp_high = QDoubleSpinBox(); self.dsp_high.setRange(50, 100); self.dsp_high.setDecimals(1); self.dsp_high.setValue(98.0)
+        self.dsp_low = QDoubleSpinBox(); self.dsp_low.setRange(0, 50); self.dsp_low.setDecimals(1); self.dsp_low.setValue(0.0)
+        self.dsp_high = QDoubleSpinBox(); self.dsp_high.setRange(50, 100); self.dsp_high.setDecimals(1); self.dsp_high.setValue(80.0)
         f.addRow(self.chk_contrast)
         f.addRow("Low %:", self.dsp_low)
         f.addRow("High %:", self.dsp_high)
@@ -291,7 +317,7 @@ class MainWindow(QMainWindow):
 
         # Background dim via rembg
         self.chk_rembg = QCheckBox("Darken background (rembg)")
-        self.dsp_rembg_dim = QDoubleSpinBox(); self.dsp_rembg_dim.setRange(0, 1); self.dsp_rembg_dim.setSingleStep(0.05); self.dsp_rembg_dim.setValue(0.45)
+        self.dsp_rembg_dim = QDoubleSpinBox(); self.dsp_rembg_dim.setRange(0, 1); self.dsp_rembg_dim.setSingleStep(0.05); self.dsp_rembg_dim.setValue(0.6)
         self.spin_rembg_feather = QSpinBox(); self.spin_rembg_feather.setRange(0, 64); self.spin_rembg_feather.setValue(8)
         self.spin_rembg_erode = QSpinBox(); self.spin_rembg_erode.setRange(0, 8); self.spin_rembg_erode.setValue(1)
 
@@ -303,14 +329,14 @@ class MainWindow(QMainWindow):
         return g
 
     def _group_solver(self) -> QGroupBox:
-        g = QGroupBox("Solver (Go-style)")
+        g = QGroupBox("Solver")
         f = QFormLayout(g)
         f.setLabelAlignment(Qt.AlignRight)
 
-        self.spin_pins = QSpinBox(); self.spin_pins.setRange(12, 2048); self.spin_pins.setValue(320)
-        self.spin_steps = QSpinBox(); self.spin_steps.setRange(1, 20000); self.spin_steps.setValue(6000)
+        self.spin_pins = QSpinBox(); self.spin_pins.setRange(12, 2048); self.spin_pins.setValue(300)
+        self.spin_steps = QSpinBox(); self.spin_steps.setRange(1, 20000); self.spin_steps.setValue(4000)
         self.spin_min_dist = QSpinBox(); self.spin_min_dist.setRange(0, 512); self.spin_min_dist.setValue(30)
-        self.dsp_line_weight = QDoubleSpinBox(); self.dsp_line_weight.setRange(0.1, 64.0); self.dsp_line_weight.setDecimals(3); self.dsp_line_weight.setValue(4.0)
+        self.dsp_line_weight = QDoubleSpinBox(); self.dsp_line_weight.setRange(0.1, 64.0); self.dsp_line_weight.setDecimals(3); self.dsp_line_weight.setValue(8.0)
         self.spin_lastn = QSpinBox(); self.spin_lastn.setRange(0, 256); self.spin_lastn.setValue(20)
 
         f.addRow("Pins:", self.spin_pins)
@@ -326,8 +352,8 @@ class MainWindow(QMainWindow):
         f = QFormLayout(g)
         f.setLabelAlignment(Qt.AlignRight)
 
-        self.dsp_alpha = QDoubleSpinBox(); self.dsp_alpha.setRange(0.005, 0.5); self.dsp_alpha.setDecimals(3); self.dsp_alpha.setValue(0.04)
-        self.dsp_gamma = QDoubleSpinBox(); self.dsp_gamma.setRange(0.5, 3.0); self.dsp_gamma.setSingleStep(0.05); self.dsp_gamma.setValue(1.30)
+        self.dsp_alpha = QDoubleSpinBox(); self.dsp_alpha.setRange(0.005, 0.5); self.dsp_alpha.setDecimals(3); self.dsp_alpha.setValue(0.1)
+        self.dsp_gamma = QDoubleSpinBox(); self.dsp_gamma.setRange(0.5, 3.0); self.dsp_gamma.setSingleStep(0.05); self.dsp_gamma.setValue(1.20)
         self.spin_thick = QSpinBox(); self.spin_thick.setRange(1, 5); self.spin_thick.setValue(1)
 
         f.addRow("Darken per line:", self.dsp_alpha)

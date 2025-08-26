@@ -1,8 +1,5 @@
 import numpy as np
 import cv2
-from typing import Tuple
-
-from StringArtConverter.utils import Segment
 
 def render_path(work_size, 
                 pins, 
