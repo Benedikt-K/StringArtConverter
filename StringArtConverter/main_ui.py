@@ -1,7 +1,5 @@
 from __future__ import annotations
 from typing import List, Tuple
-import os
-
 import cv2
 import numpy as np
 from PySide6.QtCore import Qt, QObject, QThread, Signal, Slot
@@ -11,9 +9,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QFormLayout, QProgressBar, QMessageBox, QCheckBox
 )
 
-from .greedy_solver import solve_string_art, render_path
-from .greedy_solver import convert_image_to_path
-from .multi_solver import solve_multi_strings
+from .solver import solve_string_art_go
 from .previewer import simulate_string_art
 from StringArtConverter import preprocessing
 
@@ -30,7 +26,7 @@ class ConvertWorker(QObject):
     finished = Signal(list)   # list[(from_pin, to_pin)]
     errored = Signal(str)
 
-    def __init__(self, img_bgr, n_pins: int, steps: int, min_hop: int, use_multi: bool = True, k_strings: int = 3):
+    def __init__(self, img_bgr, n_pins: int, steps: int, min_hop: int, use_multi: bool = False, k_strings: int = 3):
         super().__init__()
         self.img_bgr = img_bgr
         self.n_pins = n_pins
@@ -42,25 +38,13 @@ class ConvertWorker(QObject):
     @Slot()
     def run(self):
         try:
-            if self.use_multi:
-                # Use the multi-string solver; it returns (combined_path, per_string_paths)
-                combined, _ = solve_multi_strings(
-                    self.img_bgr,
-                    n_pins=self.n_pins,
-                    steps=self.steps,
-                    k_strings=self.k_strings,
-                    min_hop=self.min_hop,
-                    progress_cb=self.progress.emit,
-                )
-                path = combined
-            else:
-                path = convert_image_to_path(
-                    self.img_bgr,
-                    self.n_pins,
-                    self.steps,
-                    self.min_hop,
-                    progress_cb=self.progress.emit,
-                )
+            path = solve_string_art_go(
+                self.img_bgr,
+                self.n_pins,
+                self.steps,
+                self.min_hop,
+                progress_cb=self.progress.emit,
+            )
             self.finished.emit(path)
         except Exception as e:
             self.errored.emit(str(e))
