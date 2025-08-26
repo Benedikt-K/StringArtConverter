@@ -1,6 +1,12 @@
  solver:
     multi-pass / mulsti-string
     other search strategies?
+    angle penalty?
+    adaptice ink?
+    anti-ring diffusion
+
+automatization:
+    maybe add some mechanism to detect what params are needed for best result
 
 UI:
     preview of where circle is gonna be
