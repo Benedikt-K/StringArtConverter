@@ -4,7 +4,6 @@ import json
 # def Segment
 Segment = Tuple[int, int]
 
-# ----------- save path -------------
 def save_path_txt(path: List[Segment], out_txt: str) -> None:
     """
     Save path to file
@@ -13,7 +12,6 @@ def save_path_txt(path: List[Segment], out_txt: str) -> None:
         for a, b in path:
             f.write(f"{a} {b}\n")
 
-# ----------- json settings -------------
 def load_presets_json(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
