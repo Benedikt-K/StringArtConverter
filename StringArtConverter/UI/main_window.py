@@ -1,7 +1,7 @@
 # region ----------- imports -----------
 from __future__ import annotations
 from typing import List, Optional
-import sys, math
+import math
 import cv2
 import numpy as np
 import os
@@ -22,6 +22,9 @@ from StringArtConverter.preprocessing import build_brightness_for_go_solver
 from StringArtConverter.utils import save_path_txt, load_presets_json, clamp_to_ranges, Segment
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art_go
+
+# -------- APP STYLES --------
+from StringArtConverter.UI.app_styles import APP_STYLES
 # endregion
 
 # region ----------- helpers -----------
@@ -46,7 +49,6 @@ def warn(self, title, text):
 
 def error(self, title, text):
     QMessageBox.critical(self, title, text)
-
 
 # endregion
 
@@ -103,115 +105,6 @@ class ConvertWorker(QObject):
             self.errored.emit(str(e))
 # endregion
 
-# region ----------- App style -----------
-APP_STYLES = """
-/* Global base */
-QMainWindow {
-    background: #0b0c10;
-    color: #e6edf3;
-}
-QWidget {
-    background: #0b0c10;         /* <- default to dark everywhere */
-    color: #e6edf3;
-}
-
-/* Scroll area needs both the abstract and viewport styled */
-QAbstractScrollArea,
-QAbstractScrollArea::viewport,
-QScrollArea,
-QScrollArea QWidget {
-    background: #0b0c10;
-}
-
-/* Right panel explicit (in case you name the container) */
-#RightPanel {
-    background: #0b0c10;
-}
-
-/* Card-like groups */
-QGroupBox {
-    margin-top: 14px;
-    border: 1px solid #2b2f36;
-    border-radius: 10px;
-    padding: 12px;
-    background-color: #1c1f26;   /* lighter card on dark surface */
-}
-QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 12px;
-    padding: 0 6px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #ffffff;
-    background: transparent;
-}
-
-/* Labels/inputs */
-QLabel, QCheckBox, QSpinBox, QDoubleSpinBox {
-    color: #e6edf3;
-    font-size: 13px;
-}
-
-/* Sliders */
-QSlider::groove:horizontal {
-    border: 1px solid #2b2f36;
-    height: 6px;
-    border-radius: 3px;
-    background: #2b2f36;
-}
-QSlider::handle:horizontal {
-    background: #1f6feb;
-    border: none;
-    width: 14px;
-    margin: -5px 0;
-    border-radius: 7px;
-}
-QSlider::sub-page:horizontal {
-    background: #1f6feb;
-    border-radius: 3px;
-}
-
-/* Buttons */
-QPushButton {
-    background: #1f6feb;
-    color: white;
-    border: 0;
-    padding: 8px 12px;
-    border-radius: 8px;
-}
-QPushButton:disabled {
-    background: #334155;
-    color: #9aa4ad;
-}
-
-/* Progress bar */
-QProgressBar {
-    background: #111318;
-    border: 1px solid #2b2f36;
-    border-radius: 8px;
-    text-align: center;
-}
-QProgressBar::chunk {
-    background: #1f6feb;
-    border-radius: 8px;
-}
-
-/* primary CTA button */
-QPushButton#btn_convert {
-    background-color: #1f6feb;
-    color: #ffffff;
-    border: 1px solid #2b2f36;
-    border-radius: 10px;
-    padding: 10px 16px;
-    font-weight: 600;
-}
-QPushButton#btn_convert:disabled {
-    background-color: #334155;
-    color: #9aa4ad;
-}
-"""
-# endregion
-
 # region ----------- Main window -----------
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -256,22 +149,6 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(10)
 
-        title = QLabel("Controls")
-        title.setObjectName("TitleLabel")
-        right_layout.addWidget(title)
-
-        self.combo_preset = QComboBox()
-        self.combo_preset.setObjectName("comboPreset")
-        self.combo_preset.addItem("— None —")  # will be populated after widgets exist
-        row = QHBoxLayout()
-        row.addWidget(QLabel("Preset:"))
-        row.addWidget(self.combo_preset, 1)
-        right_layout.addLayout(row)
-
-        right_layout.addWidget(self._group_source())
-        right_layout.addWidget(self._group_solver())
-        right_layout.addWidget(self._group_preview())
-
         # Run row
         run_row = QHBoxLayout()
         self.btn_convert = QPushButton("Start Conversion")
@@ -286,10 +163,30 @@ class MainWindow(QMainWindow):
         right_layout.addLayout(run_row)
         right_layout.addStretch(1)
 
+        # controls
+        title = QLabel("Controls")
+        title.setObjectName("TitleLabel")
+        right_layout.addWidget(title)
+
+        # presets
+        self.combo_preset = QComboBox()
+        self.combo_preset.setObjectName("comboPreset")
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Preset:"))
+        row.addWidget(self.combo_preset, 1)
+        right_layout.addLayout(row)
+
+        # preview
+        right_layout.addWidget(self._group_preview())
+        # solver settings
+        right_layout.addWidget(self._group_solver())
+        # preprocessing settings
+        right_layout.addWidget(self._group_source())
+        
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        # not strictly required if using the stylesheet above, but safe:
+        # not strictly required if using stylesheet, but safe:
         scroll.viewport().setAttribute(Qt.WA_StyledBackground, True)
         scroll.setWidget(right_panel)
 
@@ -614,7 +511,6 @@ class MainWindow(QMainWindow):
         # 4) fill preset combo
         self.combo_preset.blockSignals(True)
         self.combo_preset.clear()
-        self.combo_preset.addItem("— None —")
         for p in self._cfg.get("presets", []):
             self.combo_preset.addItem(p.get("name", "Untitled"))
         self.combo_preset.blockSignals(False)

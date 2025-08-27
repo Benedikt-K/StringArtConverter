@@ -1,3 +1,5 @@
+import numpy as np
+
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
 from PySide6.QtGui import QAction, QPixmap, QImage, QIcon
 from PySide6.QtWidgets import (
@@ -14,20 +16,17 @@ class ClickableLabel(QLabel):
             self.clicked.emit()
         super().mouseReleaseEvent(e)
 
-def apply_to_widgets(params: dict, wmap: dict):
-    """wmap: {param_name: widget}"""
-    for name, w in wmap.items():
-        if name not in params:
+def apply_to_widgets(wmap: dict, params: dict):
+    for key, widget in wmap.items():
+        if key not in params:
             continue
-        val = params[name]
-        if isinstance(w, (QSpinBox, QDoubleSpinBox)):
-            w.setValue(val)
-        elif isinstance(w, QCheckBox):
-            w.setChecked(bool(val))
-        elif isinstance(w, QComboBox):
-            # if map to discrete strings, handle here
-            idx = w.findText(str(val))
-            if idx >= 0: w.setCurrentIndex(idx)
+        val = params[key]
+        # checkboxes
+        if hasattr(widget, "setChecked") and isinstance(val, (bool, np.bool_)):
+            widget.setChecked(bool(val))
+        # generic numeric widgets (spinboxes, sliders, custom ones)
+        elif hasattr(widget, "setValue"):
+            widget.setValue(val)
 
 def set_widget_ranges(ranges: dict, wmap: dict):
     for name, spec in ranges.items():
@@ -47,11 +46,9 @@ def set_widget_ranges(ranges: dict, wmap: dict):
 
 def collect_from_widgets(wmap: dict) -> dict:
     out = {}
-    for name, w in wmap.items():
-        if isinstance(w, (QSpinBox, QDoubleSpinBox)):
-            out[name] = w.value()
-        elif isinstance(w, QCheckBox):
-            out[name] = w.isChecked()
-        elif isinstance(w, QComboBox):
-            out[name] = w.currentText()
+    for key, widget in wmap.items():
+        if hasattr(widget, "isChecked"):
+            out[key] = bool(widget.isChecked())
+        elif hasattr(widget, "value"):
+            out[key] = widget.value()
     return out
