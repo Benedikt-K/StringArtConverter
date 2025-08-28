@@ -8,7 +8,6 @@ try:
 except Exception:
     _HAS_REMBG = False
 
-# ------------- optional preprocessing functions ---------------
 def resize_square(img_bgr: np.ndarray, size: int) -> np.ndarray:
     """
     Resize image to the desired size
@@ -45,12 +44,13 @@ def canny_edges(gray_u8: np.ndarray, low: int = -1, high: int = -1, auto_sigma: 
 def rembg_dim_background(
     img_bgr: np.ndarray,
     *,
-    dim_factor: float = 0.5,     # 0=no change, 1=completely black bg
-    feather_px: int = 6,         # soften mask edges
-    erode_px: int = 0            # shrink foreground mask (optional)
+    dim_factor: float = 0.5,
+    feather_px: int = 6,
+    erode_px: int = 0
 ) -> np.ndarray:
     """
-    Use rembg to get a foreground alpha; darken ONLY the background by dim_factor.
+    Use rembg to get a foreground mask, darken ONLY the background by dim_factor.
+    Feather_px softens the mask edges, erode_px shriks the mask
     Returns a BGR image with a darker bg, same size as input.
 
     If rembg is unavailable, returns the original image unchanged.
@@ -63,16 +63,14 @@ def rembg_dim_background(
         return img_bgr
 
     print("darkening backgound")
-    # rembg expects RGB bytes; returns RGBA with alpha=foreground
     rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    out = rembg_remove(rgb)          # np.ndarray HxWx4 (uint8) or HxWx3 if trimmed
+    out = rembg_remove(rgb)
     if out.ndim == 3 and out.shape[2] == 4:
         alpha = out[:, :, 3]
     else:
-        # Fallback: if no alpha came back, do nothing
         return img_bgr
 
-    # Make a clean, feathered background mask (1 = background, 0 = foreground)
+    # feathered background mask (1 = background, 0 = foreground)
     fg = (alpha.astype(np.float32) / 255.0)
     if erode_px > 0:
         k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (erode_px*2+1, erode_px*2+1))
@@ -81,10 +79,10 @@ def rembg_dim_background(
     if feather_px > 0:
         bg_mask = cv2.GaussianBlur(bg_mask, (0,0), feather_px)
 
-    # Darken background only: img_bg = img*(1 - dim*bg_mask)
-    bg_mask = bg_mask[..., None]       # HxWx1
+    # Darken background only
+    bg_mask = bg_mask[..., None]
     dim = np.clip(float(dim_factor), 0.0, 1.0)
-    scale = 1.0 - dim * bg_mask        # HxWx1 per-pixel factor in [1-dim,1]
+    scale = 1.0 - dim * bg_mask
     out_bgr = (img_bgr.astype(np.float32) * scale).clip(0,255).astype(np.uint8)
     return out_bgr
 
@@ -92,8 +90,7 @@ def apply_gamma(gray_u8: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     """
     Shifts midtones of the image
 
-    gamma < 1.0 --> brightens midtones
-    gamma > 1.0 --> darkens midtones
+    gamma < 1.0 brightens midtones, gamma > 1.0 darkens midtones
     """
     if abs(gamma - 1.0) < 1e-6:
         return gray_u8
@@ -111,8 +108,7 @@ def brightness_clip(gray_u8: np.ndarray, clip_high: float = 98.0) -> np.ndarray:
     g = np.clip(gray_u8.astype(np.float32) / hi, 0, 1)
     return (g * 255.0 + 0.5).astype(np.uint8)
 
-# ------------- build target using specified preprocessing steps ---------------
-def build_brightness_for_go_solver(
+def build_brightness_for_solver(
     img_bgr: np.ndarray,
     *,
     work_size: int,
@@ -129,19 +125,20 @@ def build_brightness_for_go_solver(
     rembg_dim: float,
     rembg_feather: int,
     rembg_erode: int,
-    #NEW
     pp_gamma: float,
     pp_clip_high: float,
 ) -> np.ndarray:
     """
-    Returns uint8 brightness image (H,W) where 0=black, 255=white.
+    Builds the target using specified preprocessing steps and settings
+
     Internally we form a 'target darkness' in [0..1], then convert:
       SourceImage_u8 = 255 * (1 - target_darkness)
-    so dark/edgey areas become low brightness → high error (255 - src).
+    so dark/edgey areas become low brightness, high error (255 - src).
+
+    Returns uint8 brightness image (H,W) where 0=black, 255=white.
     """
     img = resize_square(img_bgr, work_size)
 
-     # --- semantic background dim (optional) ---
     if use_rembg and rembg_dim > 0.0:
         img = rembg_dim_background(
             img,
@@ -158,7 +155,6 @@ def build_brightness_for_go_solver(
     if use_contrast:
         gray = contrast_stretch(gray, p_low=p_low, p_high=p_high)
 
-    # high exposure correction
     if pp_gamma != 1.0:
         gray = apply_gamma(gray, pp_gamma)
 
@@ -166,15 +162,13 @@ def build_brightness_for_go_solver(
         gray = brightness_clip(gray, clip_high=pp_clip_high)
 
     gray_f = gray.astype(np.float32) / 255.0
-    darkness = 1.0 - gray_f  # 1 = needs thread
+    darkness = 1.0 - gray_f
 
     if use_edges:
         e = canny_edges(gray, low=edge_low, high=edge_high, auto_sigma=edge_auto_sigma).astype(np.float32) / 255.0
-        # blend: more weight → more emphasis on contours
         target_dark = (1.0 - edge_weight) * darkness + edge_weight * e
     else:
         target_dark = darkness
 
-    # convert back to Go-style brightness
     src = (255.0 * (1.0 - target_dark)).astype(np.uint8)
     return src

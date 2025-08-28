@@ -1,7 +1,10 @@
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSlider, QDoubleSpinBox, QSpinBox
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSlider
 
 class IntSlider(QWidget):
+    """
+    Int slider that has a step size and min/max
+    """
     valueChanged = Signal(int)
 
     def __init__(self, minimum: int, maximum: int, value: int, *, suffix: str = "", tick: int | None = None, parent=None):
@@ -78,20 +81,16 @@ class FloatSlider(QWidget):
 
     def set_step(self, step: float):
         self._scale = int(round(1.0 / max(1e-9, float(step))))
-        # when step changes, we must rebuild slider range from current min/max
         if hasattr(self, "_min") and hasattr(self, "_max"):
             self._slider.setRange(0, int(round((self._max - self._min) * self._scale)))
-            # keep current value consistent
             self.setValue(self.value())
 
     def set_range(self, minimum: float, maximum: float):
         self._min = float(minimum)
         self._max = float(maximum)
         self._slider.setRange(0, int(round((self._max - self._min) * self._scale)))
-        # clamp current value
         self.setValue(self.value())
 
-    # optional alias so utils can call setRange uniformly
     def setRange(self, minimum: float, maximum: float):
         self.set_range(minimum, maximum)
 

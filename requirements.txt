@@ -11,6 +11,3 @@ onnxruntime>=1.15
 
 # For CSV export
 pandas>=2.0
-
-# If you want nice plots / testing preview (optional)
-matplotlib>=3.7

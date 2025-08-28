@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 1.1,
   "ranges": {
     "pins":              {"min": 64,  "max": 512, "step": 1},
     "steps":             {"min": 100, "max": 8000, "step": 50},

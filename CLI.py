@@ -3,14 +3,15 @@ import argparse
 import cv2, numpy as np
 from typing import Tuple, List
 
-from StringArtConverter.preprocessing import build_brightness_for_go_solver
+from StringArtConverter.preprocessing import build_brightness_for_solver
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art_go
 from StringArtConverter.utils import save_path_txt
 
 # -------------------- CLI --------------------
 def main():
-    ap = argparse.ArgumentParser(description="String-art converter (faithful Go port).")
+    ap = argparse.ArgumentParser(description="String-art converter")
+    # --- solver ---
     ap.add_argument("--input", required=True)
     ap.add_argument("--pins", type=int, default=300)
     ap.add_argument("--steps", type=int, default=4000)
@@ -20,10 +21,11 @@ def main():
     ap.add_argument("--last_n", type=int, default=20)
     ap.add_argument("--preview", default="")
     ap.add_argument("--out", default="path.txt")
+    # --- Rendering ---
     ap.add_argument("--render_alpha", type=float, default=0.10, help="Per-line darkness contribution in preview (smaller = lighter)")
     ap.add_argument("--render_gamma", type=float, default=1.0, help="Gamma correction for preview (1.0 = none)")
     ap.add_argument("--line_thickness", type=int, default=1, help="Thickness of preview lines")
-    # --- Preprocessing knobs ---
+    # --- Preprocessing ---
     ap.add_argument("--pp_clahe", action="store_true", help="Apply CLAHE before other steps")
     ap.add_argument("--pp_contrast", action="store_true", help="Percentile contrast stretch")
     ap.add_argument("--pp_c_low", type=float, default=2.0, help="Contrast low percentile (0..50)")
@@ -34,7 +36,6 @@ def main():
     ap.add_argument("--pp_rembg_erode", type=int, default=1, help="Erode foreground mask in px to reduce hair halos")
     ap.add_argument("--pp_gamma", type=float, default=1.0, help="Gamma correction before inversion ( <1 = brighten, >1 = darken highlights )")
     ap.add_argument("--pp_clip_high", type=float, default=100.0, help="Percentile high clipping for brightness (e.g. 95 = ignore brightest 5%)")
-
     ap.add_argument("--pp_edges", action="store_true", help="Add Canny edges to the target (blended)")
     ap.add_argument("--pp_edge_weight", type=float, default=0.35, help="Blend weight for edges (0..1)")
     ap.add_argument("--pp_edge_low", type=int, default=-1, help="Canny low threshold; -1 = auto")
@@ -50,7 +51,7 @@ def main():
         print(f"\rProgress: {p:3d}%", end="", flush=True)
 
     # preprocessing
-    src_u8 = build_brightness_for_go_solver(
+    src_u8 = build_brightness_for_solver(
         img_bgr=img,
         work_size=args.work_size,
         use_clahe=args.pp_clahe,
@@ -69,7 +70,7 @@ def main():
         pp_gamma=args.pp_gamma,
         pp_clip_high=args.pp_clip_high,
     )
-    # Flatten to match the Go logic (row-major)
+    # Flatten
     H = W = args.work_size
     SourceImg = src_u8.reshape(H * W).astype(np.float64)
 

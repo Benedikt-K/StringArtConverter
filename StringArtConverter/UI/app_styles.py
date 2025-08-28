@@ -9,7 +9,7 @@ QWidget {
     color: #e6edf3;
 }
 
-/* Scroll area needs both the abstract and viewport styled */
+/* Scroll area */
 QAbstractScrollArea,
 QAbstractScrollArea::viewport,
 QScrollArea,
@@ -85,7 +85,7 @@ QProgressBar::chunk {
     border-radius: 8px;
 }
 
-/* primary convert button */
+/* Primary convert button */
 QPushButton#btn_convert {
     background-color: #1f6feb;
     color: #ffffff;
@@ -188,7 +188,7 @@ QCheckBox:disabled {
     background: #194fb6;
 }
 
-/* Global tooltip */
+/* Tooltip */
 QToolTip {
     background-color: #111318;
     color: #e6edf3;
@@ -198,13 +198,13 @@ QToolTip {
     font-size: 16px;
 }
 
-/* Modern dark combobox with a proper arrow area */
+/* Combobox */
 QComboBox {
     background: #111318;
     color: #e6edf3;
     border: 1px solid #2b2f36;
     border-radius: 8px;
-    padding: 6px 34px 6px 10px;   /* <- room for arrow */
+    padding: 6px 34px 6px 10px;
     min-height: 30px;
 }
 QComboBox:hover { 

@@ -14,7 +14,7 @@ def render_path(work_size,
     H = W = work_size
     acc = np.zeros((H, W), dtype=np.float32)
 
-    # circular board mask
+    # circular mask
     yy, xx = np.ogrid[:H, :W]
     cx, cy = W * 0.5, H * 0.5
     r = min(H, W) * 0.5 - margin

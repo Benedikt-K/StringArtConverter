@@ -1,11 +1,10 @@
 import numpy as np
 
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
-from PySide6.QtGui import QAction, QPixmap, QImage, QIcon, QCursor, QColor
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QCursor, QColor
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QFileDialog,
-    QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout, QToolButton, QToolTip, QGraphicsDropShadowEffect
+    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, 
+    QDoubleSpinBox, QHBoxLayout, QToolButton, QToolTip, QGraphicsDropShadowEffect
 )
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
 
@@ -18,6 +17,9 @@ class ClickableLabel(QLabel):
         super().mouseReleaseEvent(e)
 
 class HelpBadge(QToolButton):
+    """
+    Help Box that displays tooltip on hover
+    """
     def __init__(self, tooltip_html: str, parent=None):
         super().__init__(parent)
         self.setText("?")
@@ -61,6 +63,9 @@ class CardGroup(QWidget):
         root.addLayout(self.form)
 
 def add_card_shadow(w):
+    """
+    Adds a shadow to chosen widget
+    """
     fx = QGraphicsDropShadowEffect(w)
     fx.setBlurRadius(18)
     fx.setOffset(0, 6)
@@ -99,7 +104,6 @@ def set_widget_ranges(ranges: dict, wmap: dict):
             if step is not None: w.setSingleStep(float(step))
             continue
 
-        # Custom sliders
         if isinstance(w, IntSlider):
             if lo is not None and hi is not None:
                 w.setRange(int(lo), int(hi))
@@ -109,7 +113,6 @@ def set_widget_ranges(ranges: dict, wmap: dict):
 
         if isinstance(w, FloatSlider):
             if lo is not None and hi is not None:
-                # supports either set_range or setRange
                 if hasattr(w, "set_range"):
                     w.set_range(float(lo), float(hi))
                 else:

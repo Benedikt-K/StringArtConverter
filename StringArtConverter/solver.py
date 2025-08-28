@@ -6,6 +6,9 @@ from StringArtConverter.utils import Segment
 # -------------------- Pin + Line Precomputation --------------------
 
 def pin_positions_circle(size: int, n_pins: int, margin: int = 1) -> np.ndarray:
+    """
+    Get positions of pins
+    """
     cx, cy = size / 2, size / 2
     r = size / 2 - margin
     ang = np.linspace(0, 2 * math.pi, n_pins, endpoint=False)
@@ -36,7 +39,7 @@ def precalc_lines(pins: np.ndarray, n_pins: int, size: int, min_distance: int):
 # -------------------- Core Solver --------------------
 
 def solve_string_art_go(
-    source_brightness_u8: np.ndarray,   # <-- preprocessed brightness (0..255), 2D or flat
+    source_brightness_u8: np.ndarray,
     n_pins: int,
     max_lines: int,
     *,
@@ -46,6 +49,33 @@ def solve_string_art_go(
     work_size: int = 500,
     progress_cb: Optional[callable] = None,
 ) -> Tuple[List[Segment], np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Computes sequence of pin-to-pin connections based on error minimization
+    Parameters:
+        source_brightness_u8: np.ndarray
+            Target on which error is based on
+        max_lines: int
+            How many connections are calculated
+        min_distance: int
+            How close on the ring next pin can be to current one
+        line_weight: float
+            How much each new line contributes
+        last_n: int
+            Forbids the revist of a pin for a number of lines
+        work_size: int
+            On what resolution the error is calculated
+        progress_cb: Optional[callable]
+            Optional progress tracking parameter
+    Returns:
+        List[Segment]
+            A List with all Segments of the calculated path
+        np.ndarray
+            Error at the end of computation
+        np.ndarray
+            Target used
+        np.ndarray
+            Pin positions used
+    """
 
     # Ensure shape = (H,W)
     if source_brightness_u8.ndim == 1:
@@ -57,7 +87,7 @@ def solve_string_art_go(
     pins = pin_positions_circle(work_size, n_pins)
     line_cache = precalc_lines(pins, n_pins, work_size, min_distance)
 
-    # Go logic: error starts as (255 - brightness)
+    # error starts as (255 - brightness)
     error = 255.0 - gray.ravel()
 
     path: List[Segment] = []
@@ -101,5 +131,4 @@ def solve_string_art_go(
     if progress_cb:
         progress_cb(100)
 
-    # Return: path, final error map, the brightness target we used, and pins
     return path, error.reshape(H, W), gray, pins

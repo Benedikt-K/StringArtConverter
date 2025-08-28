@@ -9,3 +9,5 @@ other:
     add options:
         load path
         select saved path, give instructions for reproducing irl
+    finish gitignore
+    proper documentation

@@ -11,16 +11,16 @@ from itertools import product
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
 from PySide6.QtGui import QAction, QPixmap, QImage, QIcon
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QLabel, QPushButton, QFileDialog,
-    QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout
+    QMainWindow, QWidget, QLabel, QPushButton, QFileDialog,
+    QVBoxLayout, QHBoxLayout, QCheckBox,QGroupBox, QProgressBar, 
+    QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout
 )
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
-from StringArtConverter.UI.ui_utils import ClickableLabel, CardGroup, apply_to_widgets, collect_from_widgets, set_widget_ranges, add_card_shadow
+from StringArtConverter.UI.ui_utils import ClickableLabel, CardGroup, apply_to_widgets, set_widget_ranges, add_card_shadow
 
 # -------- solver imports --------
-from StringArtConverter.preprocessing import build_brightness_for_go_solver
-from StringArtConverter.utils import save_path_txt, load_presets_json, clamp_to_ranges, Segment
+from StringArtConverter.preprocessing import build_brightness_for_solver
+from StringArtConverter.utils import load_presets_json, clamp_to_ranges, Segment
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art_go
 
@@ -50,10 +50,9 @@ def warn(self, title, text):
 
 def error(self, title, text):
     QMessageBox.critical(self, title, text)
-
 # endregion
 
-# region ----------- worker -----------
+# region ----------- convert worker -----------
 class ConvertWorker(QObject):
     progress = Signal(int)
     finished = Signal(list, np.ndarray, np.ndarray, np.ndarray)  # path, error, target, pins
@@ -66,8 +65,7 @@ class ConvertWorker(QObject):
 
     def run(self):
         try:
-            # preprocessing → brightness map (uint8 HxW)
-            src_u8 = build_brightness_for_go_solver(
+            src_u8 = build_brightness_for_solver(
                 img_bgr=self.img_bgr,
                 work_size=self.params["work_size"],
                 use_clahe=self.params["pp_clahe"],
@@ -83,7 +81,6 @@ class ConvertWorker(QObject):
                 rembg_dim=self.params["pp_rembg_dim"],
                 rembg_feather=self.params["pp_rembg_feather"],
                 rembg_erode=self.params["pp_rembg_erode"],
-                # optional: gamma + clipping if you added in your go_main:
                 pp_gamma=self.params.get("pp_gamma", 1.0),
                 pp_clip_high=self.params.get("pp_clip_high", 100.0),
             )
@@ -108,8 +105,8 @@ class ConvertWorker(QObject):
 
 # region ----------- param search worker -----------
 class BatchSearchWorker(QObject):
-    progress = Signal(int)   # overall %
-    finished = Signal(str)   # out_dir
+    progress = Signal(int)
+    finished = Signal(str)
     errored = Signal(str)
 
     def __init__(self, img_bgr: np.ndarray, base_params: dict, grid: dict, out_dir: str):
@@ -139,13 +136,11 @@ class BatchSearchWorker(QObject):
                 self.errored.emit("Grid is empty.")
                 return
 
-            # regenerate iterator (consumed)
             idx = 0
             for params in self._variants():
                 idx += 1
 
-                # ---- preprocessing
-                src_u8 = build_brightness_for_go_solver(
+                src_u8 = build_brightness_for_solver(
                     img_bgr=self.img_bgr,
                     work_size=params["work_size"],
                     use_clahe=params["pp_clahe"],
@@ -163,7 +158,6 @@ class BatchSearchWorker(QObject):
                     pp_clip_high=params.get("pp_clip_high", 100.0),
                 )
 
-                # ---- solve
                 path, err, target, pins = solve_string_art_go(
                     source_brightness_u8=src_u8,
                     n_pins=params["pins"],
@@ -172,10 +166,9 @@ class BatchSearchWorker(QObject):
                     line_weight=params["line_weight"],
                     last_n=params["last_n"],
                     work_size=params["work_size"],
-                    progress_cb=None,  # per-run progress omitted; we show overall only
+                    progress_cb=None,
                 )
 
-                # ---- preview
                 preview = render_path(
                     work_size=params["work_size"],
                     pins=pins,
@@ -188,10 +181,9 @@ class BatchSearchWorker(QObject):
                 img_name = f"{idx}.png"
                 cv2.imwrite(os.path.join(self.out_dir, img_name), preview)
 
-                # simple score: lower mean error is better (post-solve)
                 score = float(err.mean()) if err is not None else float("nan")
 
-                # record params (only the ones that vary or matter visually)
+                # record only relevant params
                 rec_keys = [
                     "work_size","pins","steps","min_distance","line_weight","last_n",
                     "pp_clahe","pp_contrast","pp_c_low","pp_c_high",
@@ -218,7 +210,7 @@ class BatchSearchWorker(QObject):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("String Art — GUI")
+        self.setWindowTitle("String Art Converter")
         self.resize(1500, 900)
         self.setStyleSheet(APP_STYLES)
 
@@ -235,7 +227,7 @@ class MainWindow(QMainWindow):
 
         self.setAcceptDrops(True)
 
-    # ── UI layout ────────────────────────────────────────────────────────────
+    # ----------- UI layout -----------
     def _build_ui(self):
         root = QWidget()
         main = QHBoxLayout(root)
@@ -270,6 +262,7 @@ class MainWindow(QMainWindow):
         self.btn_batch.clicked.connect(self.start_batch_search)
         self.btn_batch.setEnabled(False)
 
+        # Progress Bar
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
@@ -295,9 +288,11 @@ class MainWindow(QMainWindow):
         row.addWidget(QLabel("Presets:"))
         row.addWidget(self.combo_preset, 1)
         right_layout.addLayout(row)
+
         # solver settings
         self.group_solver = self._group_solver()
         right_layout.addWidget(self.group_solver)
+
         # preprocessing settings
         self.group_source  = self._group_source()
         right_layout.addWidget(self.group_source)
@@ -305,7 +300,6 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
-        # not strictly required if using stylesheet, but safe:
         scroll.viewport().setAttribute(Qt.WA_StyledBackground, True)
         scroll.setWidget(right_panel)
 
@@ -321,7 +315,7 @@ class MainWindow(QMainWindow):
 
         # connect presets
         self._build_wmap()
-        self._load_presets_json()           # load ranges + default + presets
+        self._load_presets_json()
         self.combo_preset.currentIndexChanged[int].connect(self._on_preset_changed)
 
     def _group_source(self) -> QGroupBox:
@@ -337,7 +331,7 @@ class MainWindow(QMainWindow):
         card = CardGroup("Image preprocessing options", help_html, self)
         f = card.form
 
-        # Work size (int slider)
+        # Work size
         self.sld_work = IntSlider(128, 2048, 500, suffix=" px", tick=128)
         f.addRow("Work size:", self.sld_work)
 
@@ -345,7 +339,7 @@ class MainWindow(QMainWindow):
         self.chk_clahe = QCheckBox("CLAHE")
         f.addRow(self.chk_clahe)
 
-        # Contrast stretch (float sliders)
+        # Contrast stretch
         self.chk_contrast = QCheckBox("Contrast stretch")
         self.sld_low = FloatSlider(0.0, 50.0, 0.0, step=0.5, suffix=" %")
         self.sld_high = FloatSlider(50.0, 100.0, 80.0, step=0.5, suffix=" %")
@@ -359,7 +353,7 @@ class MainWindow(QMainWindow):
         f.addRow(self.chk_edges)
         f.addRow("Edge weight:", self.sld_edge_weight)
 
-        # Background dim via rembg
+        # Background dim
         self.chk_rembg = QCheckBox("Darken background")
         self.sld_rembg_dim = FloatSlider(0.0, 1.0, 0.6, step=0.05)
         self.sld_rembg_feather = IntSlider(0, 64, 8, suffix=" px", tick=4)
@@ -369,7 +363,7 @@ class MainWindow(QMainWindow):
         f.addRow("Feather σ:", self.sld_rembg_feather)
         f.addRow("Erode FG:", self.sld_rembg_erode)
 
-        # Check for ranges of sliders
+        # Check ranges of sliders
         self._wire_percentile_guards()
 
         return card
@@ -389,7 +383,6 @@ class MainWindow(QMainWindow):
         self.sld_pins = IntSlider(12, 2048, 300)
         self.sld_steps = IntSlider(1, 20000, 4000, tick=1000)
         self.sld_min_dist = IntSlider(0, 512, 30, suffix=" pins", tick=16)
-        # line_weight can work well on 0.1..16 for most photos; adjust if you like
         self.sld_line_weight = FloatSlider(0.1, 16.0, 8.0, step=0.01)
         self.sld_lastn = IntSlider(0, 256, 20)
 
@@ -418,7 +411,6 @@ class MainWindow(QMainWindow):
         f.addRow("Gamma:", self.sld_gamma)
         f.addRow("Line thickness:", self.sld_thick)
 
-        # buttons row stays the same
         row = QHBoxLayout()
         self.btn_save_preview = QPushButton("Save Preview…")
         self.btn_save_preview.clicked.connect(self.save_preview)
@@ -431,7 +423,7 @@ class MainWindow(QMainWindow):
         f.addRow(row)
         return card
 
-    # ── menu ─────────────────────────────────────────────────────────────────
+    # ----------- Menu -----------
     def _build_menu(self):
         m = self.menuBar().addMenu("&File")
         act_open = QAction("Open Image…", self)
@@ -454,7 +446,7 @@ class MainWindow(QMainWindow):
         self.sld_low.valueChanged.connect(clamp_low)
         self.sld_high.valueChanged.connect(clamp_high)
 
-    # ── drag & drop ──────────────────────────────────────────────────────────
+    # ----------- Drag & Drop -----------
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
@@ -464,7 +456,7 @@ class MainWindow(QMainWindow):
             self.load_image(url.toLocalFile())
             break
 
-    # ── file ops ─────────────────────────────────────────────────────────────
+    # ----------- Load File -----------
     def open_image(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open image", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if path:
@@ -485,7 +477,7 @@ class MainWindow(QMainWindow):
         self.current_path = []
         self.progress.setValue(0)
 
-    # ── run conversion ───────────────────────────────────────────────────────
+    # ----------- Run Converter -----------
     def gather_params(self) -> dict:
         return dict(
             work_size=self.sld_work.value(),
@@ -550,7 +542,7 @@ class MainWindow(QMainWindow):
         self.btn_export_path.setEnabled(bool(path))
 
         if not path:
-            info(self, "Conversion", "No path produced (try fewer pins or more lines).")
+            info(self, "Conversion", "No path produced (try other parameters).")
             return
 
         # render preview
@@ -563,7 +555,7 @@ class MainWindow(QMainWindow):
             gamma=params["render_gamma"],
             thickness=params["line_thickness"],
         )
-        rgb = np.dstack([preview_u8]*3)  # grayscale → RGB for display
+        rgb = np.dstack([preview_u8]*3)
         self.image_label.setPixmap(to_qpixmap_from_rgb(rgb, self.image_label.size()))
         info(self, "Done", f"Generated {len(path)} segments.")
 
@@ -571,7 +563,7 @@ class MainWindow(QMainWindow):
         self.btn_convert.setEnabled(True)
         error(self, "Error during conversion", msg)
 
-    # ── exports ──────────────────────────────────────────────────────────────
+    # ----------- Save Methods -----------
     def save_preview(self):
         if not self.current_path or self.current_pins is None:
             info(self, "No preview", "Run a conversion first.")
@@ -606,11 +598,13 @@ class MainWindow(QMainWindow):
         except Exception as e:
             error(self, "Save failed", str(e))
 
-    # ── import jsons ──────────────────────────────────────────────────────────────
+    # ----------- Settings Import -----------
     def _build_wmap(self):
-        """Map parameter keys <-> widgets (must match your utils/json keys)."""
+        """
+        Map parameter keys to widgets.
+        """
         self.wmap = {
-            # core / solver
+            # solver
             "work_size":         self.sld_work,
             "pins":              self.sld_pins,
             "steps":             self.sld_steps,
@@ -630,11 +624,6 @@ class MainWindow(QMainWindow):
             "pp_c_high":         self.sld_high,
             "pp_edges":          self.chk_edges,
             "pp_edge_weight":    self.sld_edge_weight,
-            # you currently keep auto thresholds:
-            # "pp_edge_low":     <no widget>,
-            # "pp_edge_high":    <no widget>,
-            # "pp_edge_auto_sigma": <constant in gather_params>,
-
             "pp_rembg":          self.chk_rembg,
             "pp_rembg_dim":      self.sld_rembg_dim,
             "pp_rembg_feather":  self.sld_rembg_feather,
@@ -642,10 +631,12 @@ class MainWindow(QMainWindow):
         }
 
     def _load_presets_json(self):
-        """Read settings.json, populate ranges, default, and preset list."""
+        """
+        Read settings.json, apply settings to widgets (ranges, default, and preset list).
+        """
         # load file
         cfg_path = os.path.join(os.path.dirname(__file__), "settings.json")
-        self._cfg = load_presets_json(cfg_path)  # {ranges, default, presets}
+        self._cfg = load_presets_json(cfg_path)
 
         # apply ranges to widgets
         set_widget_ranges(self._cfg.get("ranges", {}), self.wmap)
@@ -666,7 +657,7 @@ class MainWindow(QMainWindow):
         self._on_preset_changed(0)
 
     def _on_preset_changed(self, idx: int):
-        if not hasattr(self, "_cfg"):  # safety
+        if not hasattr(self, "_cfg"):
             return
         ranges = self._cfg.get("ranges", {})
         if idx == 0:
@@ -678,20 +669,21 @@ class MainWindow(QMainWindow):
             params = clamp_to_ranges(params, ranges)
         apply_to_widgets(params, self.wmap)
 
-    # --------------- Batch prams debug/get -----------------------
+    # --------------- Batch prams get -----------------------
     def start_batch_search(self):
         if self.img_bgr is None:
             info(self, "No image", "Load an image first.")
             return
 
-        # choose output folder
         out_dir = QFileDialog.getExistingDirectory(self, "Choose output folder for batch results")
         if not out_dir:
             return
 
         base = self.gather_params()
 
-        # --------- EDIT THIS GRID as you like (kept modest to avoid explosion)
+        # This is the "grid search" for the batch search here, as you already are in the code you can use this to generate
+        # multiple images/paths to find the params that fit you image the best. feel free to modify any of the ranges below.
+        # It searches through all possible combinations so dont search through all of them at once :D
         grid = {
             # preprocessing toggles/weights
             "pp_edges":        [True],
@@ -707,36 +699,34 @@ class MainWindow(QMainWindow):
             "pp_rembg_feather":[base["pp_rembg_feather"]],
             "pp_rembg_erode":  [base["pp_rembg_erode"]],
 
-            # tonal shaping
             "pp_gamma":        [0.65],
             "pp_clip_high":    [95.0],         
 
-            # solver minimal variation (or stick to base to keep runtime sane)
             "line_weight":     [8],
             "min_distance":    [base["min_distance"]],
-            # keep pins/steps/last_n from base:
+
             "pins":            [base["pins"]],
             "steps":           [base["steps"]],
             "last_n":          [base["last_n"]],
             "work_size":       [base["work_size"]],
 
-            # preview kept constant so visual comparison is fair:
+            # preview kept constant so visual comparison is doable:
             "render_alpha":    [base["render_alpha"]],
             "render_gamma":    [base["render_gamma"]],
             "line_thickness":  [base["line_thickness"]],
         }
 
         def _prune_grid(base: dict, grid: dict) -> dict:
-            """Return a copy of grid with dependent knobs collapsed when their toggle is False."""
-            g = {k: list(v) for k, v in grid.items()}  # shallow copy of lists
+            """
+            Return a copy of grid with dependent possibilities collapsed when their toggle is False.
 
-            # If pp_edges includes False, collapse pp_edge_weight for the False branch.
-            # Easiest practical way: if pp_edges is [False] only, just keep one value for weight.
+            Example: If pp_edges includes False, collapse pp_edge_weight for the False branch.
+            """
+            g = {k: list(v) for k, v in grid.items()}
+
             if "pp_edges" in g and g["pp_edges"] == [False]:
-                # keep current UI value (or first provided) to avoid extra runs
                 g["pp_edge_weight"] = [base.get("pp_edge_weight", g.get("pp_edge_weight", [0.35])[0])]
 
-            # If pp_rembg is [False], collapse its extras
             if "pp_rembg" in g and g["pp_rembg"] == [False]:
                 g["pp_rembg_dim"] = [base.get("pp_rembg_dim", g.get("pp_rembg_dim", [0.0])[0])]
                 g["pp_rembg_feather"] = [base.get("pp_rembg_feather", g.get("pp_rembg_feather", [8])[0])]
@@ -746,8 +736,6 @@ class MainWindow(QMainWindow):
 
         grid = _prune_grid(base, grid)
 
-
-        # Optional: show how many runs
         def _count_runs(g):
             c = 1
             for v in g.values():
@@ -791,5 +779,4 @@ class MainWindow(QMainWindow):
         self.btn_batch.setEnabled(True)
         info(self, "Batch done", f"Saved previews and params.txt to:\n{out_dir}")
 
-    
 # endregion

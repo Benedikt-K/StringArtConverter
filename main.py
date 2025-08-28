@@ -4,7 +4,6 @@ from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from StringArtConverter.UI.main_window import MainWindow
 
-# region ----------- main -----------
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("String Art Converter")
@@ -17,4 +16,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-# endregion
