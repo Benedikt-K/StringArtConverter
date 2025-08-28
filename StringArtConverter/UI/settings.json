@@ -1,14 +1,14 @@
 {
   "version": 1,
   "ranges": {
-    "pins":              {"min": 64,  "max": 1024, "step": 1},
-    "steps":             {"min": 100, "max": 10000, "step": 50},
+    "pins":              {"min": 64,  "max": 512, "step": 1},
+    "steps":             {"min": 100, "max": 8000, "step": 50},
     "work_size":         {"min": 256, "max": 2048, "step": 64},
     "min_distance":      {"min": 2,   "max": 120,  "step": 1},
     "line_weight":       {"min": 1.0, "max": 16.0, "step": 0.1},
     "last_n":            {"min": 0,   "max": 50,   "step": 1},
     "render_alpha":      {"min": 0.01,"max": 0.50, "step": 0.01},
-    "render_gamma":      {"min": 0.8, "max": 2.2,  "step": 0.05},
+    "render_gamma":      {"min": 0.2, "max": 2.0,  "step": 0.05},
     "line_thickness":    {"min": 1,   "max": 4,    "step": 1},
 
     "pp_edge_weight":    {"min": 0.0, "max": 1.0,  "step": 0.05},
@@ -25,11 +25,11 @@
     "pp_rembg_erode":    {"min": 0,   "max": 8,    "step": 1}
   },
   "defaults": {
-    "pins": 320,
-    "steps": 3000,
-    "work_size": 1000,
+    "pins": 300,
+    "steps": 4000,
+    "work_size": 500,
     "min_distance": 30,
-    "line_weight": 6.0,
+    "line_weight": 8.0,
     "last_n": 20,
     "render_alpha": 0.10,
     "render_gamma": 1.2,
@@ -46,26 +46,26 @@
     "pp_c_high": 98.0,
     "pp_gamma": 0.8,
     "pp_clip_low": 0.0,
-    "pp_clip_high": 1.0,
+    "pp_clip_high": 100.0,
     "pp_rembg": true,
-    "pp_rembg_dim": 0.6,
+    "pp_rembg_dim": 0.45,
     "pp_rembg_feather": 6,
     "pp_rembg_erode": 1
   },
   "presets": [
     {
-      "name": "Portrait - Crisp edges",
+      "name": "Balanced Portrait",
       "params": {
         "pp_edges": true,
-        "pp_edge_weight": 0.5,
-        "pp_gamma": 1.1,
-        "line_weight": 5.0,
-        "min_distance": 24,
+        "pp_edge_weight": 0.2,
+        "pp_gamma": 0.8,
+        "line_weight": 1.0,
+        "min_distance": 30,
         "last_n": 20
       }
     },
     {
-      "name": "Soft tones - more darkness",
+      "name": "Bright faces",
       "params": {
         "pp_edges": false,
         "pp_contrast": true,
@@ -73,6 +73,37 @@
         "pp_c_high": 97.0,
         "pp_gamma": 1.25,
         "line_weight": 7.0
+      }
+    },
+    {
+    "name": "test",
+    "params": {
+      "pins": 300,
+      "steps": 4000,
+      "work_size": 500,
+      "min_distance": 30,
+      "line_weight": 8.0,
+      "last_n": 20,
+      "render_alpha": 0.10,
+      "render_gamma": 1.2,
+      "line_thickness": 1,
+
+      "pp_clahe": false,
+      "pp_contrast": false,
+      "pp_edges": true,
+      "pp_edge_weight": 0.2,
+      "pp_edge_low": -1,
+      "pp_edge_high": -1,
+      "pp_edge_auto_sigma": 0.33,
+      "pp_c_low": 2.0,
+      "pp_c_high": 98.0,
+      "pp_gamma": 0.8,
+      "pp_clip_low": 0.0,
+      "pp_clip_high": 100.0,
+      "pp_rembg": true,
+      "pp_rembg_dim": 0.45,
+      "pp_rembg_feather": 6,
+      "pp_rembg_erode": 1
       }
     }
   ]

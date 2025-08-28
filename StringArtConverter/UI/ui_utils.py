@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
     QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout
 )
+from StringArtConverter.UI.sliders import IntSlider, FloatSlider
 
 class ClickableLabel(QLabel):
     clicked = Signal()
@@ -16,15 +17,13 @@ class ClickableLabel(QLabel):
             self.clicked.emit()
         super().mouseReleaseEvent(e)
 
-def apply_to_widgets(wmap: dict, params: dict):
-    for key, widget in wmap.items():
-        if key not in params:
+def apply_to_widgets(params: dict, wmap: dict):
+    for key, val in params.items():
+        widget = wmap.get(key)
+        if widget is None:
             continue
-        val = params[key]
-        # checkboxes
         if hasattr(widget, "setChecked") and isinstance(val, (bool, np.bool_)):
             widget.setChecked(bool(val))
-        # generic numeric widgets (spinboxes, sliders, custom ones)
         elif hasattr(widget, "setValue"):
             widget.setValue(val)
 
@@ -33,16 +32,41 @@ def set_widget_ranges(ranges: dict, wmap: dict):
         w = wmap.get(name)
         if w is None:
             continue
+
+        lo = spec.get("min", None)
+        hi = spec.get("max", None)
+        step = spec.get("step", None)
+
         if isinstance(w, QSpinBox):
-            w.setRange(int(spec.get("min", w.minimum() or 0)),
-                       int(spec.get("max", w.maximum() or 999999)))
-            step = int(spec.get("step", 1))
-            w.setSingleStep(step)
-        elif isinstance(w, QDoubleSpinBox):
-            w.setRange(float(spec.get("min", w.minimum())),
-                       float(spec.get("max", w.maximum())))
-            step = float(spec.get("step", w.singleStep()))
-            w.setSingleStep(step)
+            if lo is not None: w.setMinimum(int(lo))
+            if hi is not None: w.setMaximum(int(hi))
+            if step is not None: w.setSingleStep(int(step))
+            continue
+
+        if isinstance(w, QDoubleSpinBox):
+            if lo is not None: w.setMinimum(float(lo))
+            if hi is not None: w.setMaximum(float(hi))
+            if step is not None: w.setSingleStep(float(step))
+            continue
+
+        # Custom sliders
+        if isinstance(w, IntSlider):
+            if lo is not None and hi is not None:
+                w.setRange(int(lo), int(hi))
+            if step is not None and hasattr(w, "set_step"):
+                w.set_step(int(step))
+            continue
+
+        if isinstance(w, FloatSlider):
+            if lo is not None and hi is not None:
+                # supports either set_range or setRange
+                if hasattr(w, "set_range"):
+                    w.set_range(float(lo), float(hi))
+                else:
+                    w.setRange(float(lo), float(hi))
+            if step is not None and hasattr(w, "set_step"):
+                w.set_step(float(step))
+            continue
 
 def collect_from_widgets(wmap: dict) -> dict:
     out = {}

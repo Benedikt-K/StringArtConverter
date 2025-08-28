@@ -8,12 +8,6 @@ class IntSlider(QWidget):
         super().__init__(parent)
         self._suffix = suffix
         self._slider = QSlider(Qt.Horizontal)
-        self._slider.setRange(minimum, maximum)
-        self._slider.setValue(value)
-        if tick:
-            self._slider.setTickInterval(tick)
-            self._slider.setTickPosition(QSlider.TicksBelow)
-
         self._label = QLabel(f"{value}{suffix}")
         self._label.setMinimumWidth(72)
 
@@ -22,7 +16,20 @@ class IntSlider(QWidget):
         lay.addWidget(self._slider, 1)
         lay.addWidget(self._label, 0)
 
+        self._slider.setRange(minimum, maximum)
+        self._slider.setValue(value)
+        if tick:
+            self._slider.setTickInterval(int(tick))
+            self._slider.setTickPosition(QSlider.TicksBelow)
+        
         self._slider.valueChanged.connect(self._on_change)
+
+    def setRange(self, minimum: int, maximum: int):
+        self._slider.setRange(int(minimum), int(maximum))
+        self.setValue(self.value())
+
+    def set_step(self, step: int):
+        self._slider.setPageStep(max(1, int(step)))
 
     def _on_change(self, v: int):
         self._label.setText(f"{v}{self._suffix}")
@@ -49,19 +56,9 @@ class FloatSlider(QWidget):
     def __init__(self, minimum: float, maximum: float, value: float, *, step: float = 0.01, decimals: int | None = None,
                  suffix: str = "", tick: float | None = None, parent=None):
         super().__init__(parent)
-        self._suffix = suffix
-        # choose scale from step if not set
-        self._scale = int(round(1.0 / step)) if step > 0 else 100
-        self._min = minimum
-        self._max = maximum
         self._decimals = decimals if decimals is not None else max(0, len(str(step).split(".")[-1]))
+        self._suffix = suffix
         self._slider = QSlider(Qt.Horizontal)
-        self._slider.setRange(0, int(round((maximum - minimum) * self._scale)))
-        self._slider.setValue(int(round((value - minimum) * self._scale)))
-        if tick:
-            self._slider.setTickInterval(int(round(tick * self._scale)))
-            self._slider.setTickPosition(QSlider.TicksBelow)
-
         self._label = QLabel(self._fmt(value))
         self._label.setMinimumWidth(72)
 
@@ -70,7 +67,33 @@ class FloatSlider(QWidget):
         lay.addWidget(self._slider, 1)
         lay.addWidget(self._label, 0)
 
+        self.set_step(step)
+        self._slider.setRange(minimum, maximum)
+        self._slider.setValue(value)
+        if tick:
+            self._slider.setTickInterval(int(round(tick * self._scale)))
+            self._slider.setTickPosition(QSlider.TicksBelow)
+
         self._slider.valueChanged.connect(self._on_change)
+
+    def set_step(self, step: float):
+        self._scale = int(round(1.0 / max(1e-9, float(step))))
+        # when step changes, we must rebuild slider range from current min/max
+        if hasattr(self, "_min") and hasattr(self, "_max"):
+            self._slider.setRange(0, int(round((self._max - self._min) * self._scale)))
+            # keep current value consistent
+            self.setValue(self.value())
+
+    def set_range(self, minimum: float, maximum: float):
+        self._min = float(minimum)
+        self._max = float(maximum)
+        self._slider.setRange(0, int(round((self._max - self._min) * self._scale)))
+        # clamp current value
+        self.setValue(self.value())
+
+    # optional alias so utils can call setRange uniformly
+    def setRange(self, minimum: float, maximum: float):
+        self.set_range(minimum, maximum)
 
     def _fmt(self, v: float) -> str:
         return f"{v:.{self._decimals}f}{self._suffix}"

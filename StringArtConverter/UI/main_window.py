@@ -5,6 +5,7 @@ import math
 import cv2
 import numpy as np
 import os
+import json
 
 # -------- UI ----------
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
@@ -168,6 +169,9 @@ class MainWindow(QMainWindow):
         title.setObjectName("TitleLabel")
         right_layout.addWidget(title)
 
+        # preview
+        right_layout.addWidget(self._group_preview())
+
         # presets
         self.combo_preset = QComboBox()
         self.combo_preset.setObjectName("comboPreset")
@@ -175,9 +179,6 @@ class MainWindow(QMainWindow):
         row.addWidget(QLabel("Preset:"))
         row.addWidget(self.combo_preset, 1)
         right_layout.addLayout(row)
-
-        # preview
-        right_layout.addWidget(self._group_preview())
         # solver settings
         right_layout.addWidget(self._group_solver())
         # preprocessing settings
@@ -197,7 +198,7 @@ class MainWindow(QMainWindow):
         # connect presets
         self._build_wmap()
         self._load_presets_json()           # load ranges + defaults + presets
-        self.combo_preset.currentIndexChanged.connect(self._on_preset_changed)
+        self.combo_preset.currentIndexChanged[int].connect(self._on_preset_changed)
 
     def _group_source(self) -> QGroupBox:
         g = QGroupBox("Image / Preprocessing")
@@ -497,34 +498,38 @@ class MainWindow(QMainWindow):
 
     def _load_presets_json(self):
         """Read settings.json, populate ranges, defaults, and preset list."""
-        # 1) load file
+        # load file
         cfg_path = os.path.join(os.path.dirname(__file__), "settings.json")
         self._cfg = load_presets_json(cfg_path)  # {ranges, defaults, presets}
 
-        # 2) apply ranges to widgets
+        # apply ranges to widgets
         set_widget_ranges(self._cfg.get("ranges", {}), self.wmap)
 
-        # 3) apply defaults
+        # apply defaults
         defaults = clamp_to_ranges(self._cfg.get("defaults", {}), self._cfg.get("ranges", {}))
         apply_to_widgets(defaults, self.wmap)
 
-        # 4) fill preset combo
+        # fill preset combo
         self.combo_preset.blockSignals(True)
         self.combo_preset.clear()
+        self.combo_preset.addItem("Defaults")
         for p in self._cfg.get("presets", []):
             self.combo_preset.addItem(p.get("name", "Untitled"))
         self.combo_preset.blockSignals(False)
 
+        self.combo_preset.setCurrentIndex(0)
+        self._on_preset_changed(0)
+
     def _on_preset_changed(self, idx: int):
-        """Apply a named preset (defaults merged with preset params)."""
-        if idx <= 0:
-            # back to defaults
-            defaults = clamp_to_ranges(self._cfg.get("defaults", {}), self._cfg.get("ranges", {}))
-            apply_to_widgets(defaults, self.wmap)
+        if not hasattr(self, "_cfg"):  # safety
             return
-        preset = self._cfg["presets"][idx - 1]
-        params = dict(self._cfg.get("defaults", {}))
-        params.update(preset.get("params", {}))
-        params = clamp_to_ranges(params, self._cfg.get("ranges", {}))
+        ranges = self._cfg.get("ranges", {})
+        if idx == 0:
+            params = clamp_to_ranges(self._cfg.get("defaults", {}), ranges)
+        else:
+            preset = self._cfg["presets"][idx - 1]
+            params = dict(self._cfg.get("defaults", {}))
+            params.update(preset.get("params", {}))
+            params = clamp_to_ranges(params, ranges)
         apply_to_widgets(params, self.wmap)
 # endregion
