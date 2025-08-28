@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout
 )
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
-from StringArtConverter.UI.ui_utils import ClickableLabel, apply_to_widgets, collect_from_widgets, set_widget_ranges
+from StringArtConverter.UI.ui_utils import ClickableLabel, CardGroup, apply_to_widgets, collect_from_widgets, set_widget_ranges, add_card_shadow
 
 # -------- solver imports --------
 from StringArtConverter.preprocessing import build_brightness_for_go_solver
@@ -248,13 +248,13 @@ class MainWindow(QMainWindow):
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setMinimumSize(680, 480)
         self.image_label.setStyleSheet("border:1px dashed #888; border-radius:12px; padding:16px;")
-        self.image_label.setCursor(Qt.PointingHandCursor)   # nice UX hint
+        self.image_label.setCursor(Qt.PointingHandCursor)
         self.image_label.clicked.connect(self.open_image)
 
         # Right: controls (scrollable)
         right_panel = QWidget()
-        right_panel.setObjectName("RightPanel")                # <- name it so CSS can target it
-        right_panel.setAttribute(Qt.WA_StyledBackground, True) # <- ensure bg is painted
+        right_panel.setObjectName("RightPanel")
+        right_panel.setAttribute(Qt.WA_StyledBackground, True)
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(10)
 
@@ -265,7 +265,7 @@ class MainWindow(QMainWindow):
         self.btn_convert.clicked.connect(self.start_conversion)
         self.btn_convert.setEnabled(False)
 
-        # params button
+        # params search button
         self.btn_batch = QPushButton("Batch Preset Search…")
         self.btn_batch.clicked.connect(self.start_batch_search)
         self.btn_batch.setEnabled(False)
@@ -285,19 +285,22 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(title)
 
         # preview
-        right_layout.addWidget(self._group_preview())
+        self.group_preview = self._group_preview()
+        right_layout.addWidget(self.group_preview)
 
         # presets
         self.combo_preset = QComboBox()
         self.combo_preset.setObjectName("comboPreset")
         row = QHBoxLayout()
-        row.addWidget(QLabel("Preset:"))
+        row.addWidget(QLabel("Presets:"))
         row.addWidget(self.combo_preset, 1)
         right_layout.addLayout(row)
         # solver settings
-        right_layout.addWidget(self._group_solver())
+        self.group_solver = self._group_solver()
+        right_layout.addWidget(self.group_solver)
         # preprocessing settings
-        right_layout.addWidget(self._group_source())
+        self.group_source  = self._group_source()
+        right_layout.addWidget(self.group_source)
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -310,15 +313,29 @@ class MainWindow(QMainWindow):
         main.addWidget(scroll, 1)
         self.setCentralWidget(root)
 
+        # add card shadows
+        add_card_shadow(self.group_preview)
+        add_card_shadow(self.group_solver)
+        add_card_shadow(self.group_source)
+        add_card_shadow(self.combo_preset)
+
         # connect presets
         self._build_wmap()
-        self._load_presets_json()           # load ranges + defaults + presets
+        self._load_presets_json()           # load ranges + default + presets
         self.combo_preset.currentIndexChanged[int].connect(self._on_preset_changed)
 
     def _group_source(self) -> QGroupBox:
-        g = QGroupBox("Image preprocessing options")
-        f = QFormLayout(g)
-        f.setLabelAlignment(Qt.AlignRight)
+        help_html = (
+            "<b>Preprocessing</b><br>"
+            "<u>Work size</u>: resizing the image (higher = better quality and slower).<br>"
+            "<u>CLAHE</u>: local contrast equalization (can add noise).<br>"
+            "<u>Contrast stretch</u>: remap dark/bright percentiles ('compress' grayscale values).<br>"
+            "<u>Blend edges</u>: mix edges into the target (higher = more contour bias).<br>"
+            "<u>Darken background (rembg)</u>: AI background detection mask to dim background;"
+            " feather/erode refine mask."
+        )
+        card = CardGroup("Image preprocessing options", help_html, self)
+        f = card.form
 
         # Work size (int slider)
         self.sld_work = IntSlider(128, 2048, 500, suffix=" px", tick=128)
@@ -355,12 +372,19 @@ class MainWindow(QMainWindow):
         # Check for ranges of sliders
         self._wire_percentile_guards()
 
-        return g
+        return card
 
     def _group_solver(self) -> QGroupBox:
-        g = QGroupBox("General options")
-        f = QFormLayout(g)
-        f.setLabelAlignment(Qt.AlignRight)
+        help_html = (
+            "<b>General options</b><br>"
+            "<u>Pins</u>: number of nails around the circle.<br>"
+            "<u>Max lines</u>: number of threads to compute.<br>"
+            "<u>Min distance</u>: minimum direct neighbors skipped to avoid short lines.<br>"
+            "<u>Line weight</u>: how much one thread lowers residual (higher = darker, coarser).<br>"
+            "<u>Cooldown last-N</u>: avoid revisiting the last N pins to reduce streaks."
+        )
+        card = CardGroup("General options", help_html, self)
+        f = card.form
 
         self.sld_pins = IntSlider(12, 2048, 300)
         self.sld_steps = IntSlider(1, 20000, 4000, tick=1000)
@@ -374,12 +398,17 @@ class MainWindow(QMainWindow):
         f.addRow("Min distance:", self.sld_min_dist)
         f.addRow("Line weight:", self.sld_line_weight)
         f.addRow("Cooldown last-N:", self.sld_lastn)
-        return g
+        return card
 
     def _group_preview(self) -> QGroupBox:
-        g = QGroupBox("Preview options")
-        f = QFormLayout(g)
-        f.setLabelAlignment(Qt.AlignRight)
+        help_html = (
+            "<b>Rendering Preview</b><br>"
+            "<u>Darken per line</u>: how much each line darkens the preview.<br>"
+            "<u>Gamma</u>: display gamma.<br>"
+            "<u>Line thickness</u>: 'string' width."
+        )
+        card = CardGroup("Preview options", help_html, self)
+        f = card.form
 
         self.sld_alpha = FloatSlider(0.005, 0.5, 0.10, step=0.005)
         self.sld_gamma = FloatSlider(0.5, 3.0, 1.20, step=0.05)
@@ -400,7 +429,7 @@ class MainWindow(QMainWindow):
         row.addWidget(self.btn_save_preview)
         row.addWidget(self.btn_export_path)
         f.addRow(row)
-        return g
+        return card
 
     # ── menu ─────────────────────────────────────────────────────────────────
     def _build_menu(self):
@@ -613,22 +642,22 @@ class MainWindow(QMainWindow):
         }
 
     def _load_presets_json(self):
-        """Read settings.json, populate ranges, defaults, and preset list."""
+        """Read settings.json, populate ranges, default, and preset list."""
         # load file
         cfg_path = os.path.join(os.path.dirname(__file__), "settings.json")
-        self._cfg = load_presets_json(cfg_path)  # {ranges, defaults, presets}
+        self._cfg = load_presets_json(cfg_path)  # {ranges, default, presets}
 
         # apply ranges to widgets
         set_widget_ranges(self._cfg.get("ranges", {}), self.wmap)
 
-        # apply defaults
-        defaults = clamp_to_ranges(self._cfg.get("defaults", {}), self._cfg.get("ranges", {}))
-        apply_to_widgets(defaults, self.wmap)
+        # apply default
+        default = clamp_to_ranges(self._cfg.get("default", {}), self._cfg.get("ranges", {}))
+        apply_to_widgets(default, self.wmap)
 
         # fill preset combo
         self.combo_preset.blockSignals(True)
         self.combo_preset.clear()
-        self.combo_preset.addItem("Defaults")
+        self.combo_preset.addItem("Default")
         for p in self._cfg.get("presets", []):
             self.combo_preset.addItem(p.get("name", "Untitled"))
         self.combo_preset.blockSignals(False)
@@ -641,10 +670,10 @@ class MainWindow(QMainWindow):
             return
         ranges = self._cfg.get("ranges", {})
         if idx == 0:
-            params = clamp_to_ranges(self._cfg.get("defaults", {}), ranges)
+            params = clamp_to_ranges(self._cfg.get("default", {}), ranges)
         else:
             preset = self._cfg["presets"][idx - 1]
-            params = dict(self._cfg.get("defaults", {}))
+            params = dict(self._cfg.get("default", {}))
             params.update(preset.get("params", {}))
             params = clamp_to_ranges(params, ranges)
         apply_to_widgets(params, self.wmap)

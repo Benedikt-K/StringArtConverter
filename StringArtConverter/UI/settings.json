@@ -24,7 +24,7 @@
     "pp_rembg_feather":  {"min": 0,   "max": 32,   "step": 1},
     "pp_rembg_erode":    {"min": 0,   "max": 8,    "step": 1}
   },
-  "defaults": {
+  "default": {
     "pins": 300,
     "steps": 4000,
     "work_size": 500,

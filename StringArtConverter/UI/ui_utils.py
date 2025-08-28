@@ -1,11 +1,11 @@
 import numpy as np
 
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
-from PySide6.QtGui import QAction, QPixmap, QImage, QIcon
+from PySide6.QtGui import QAction, QPixmap, QImage, QIcon, QCursor, QColor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QLabel, QPushButton, QFileDialog,
     QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, QDoubleSpinBox, QCheckBox,
-    QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout
+    QGroupBox, QProgressBar, QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout, QToolButton, QToolTip, QGraphicsDropShadowEffect
 )
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
 
@@ -16,6 +16,56 @@ class ClickableLabel(QLabel):
         if e.button() == Qt.LeftButton:
             self.clicked.emit()
         super().mouseReleaseEvent(e)
+
+class HelpBadge(QToolButton):
+    def __init__(self, tooltip_html: str, parent=None):
+        super().__init__(parent)
+        self.setText("?")
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(tooltip_html)
+        self.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.setFixedSize(22, 22)
+        self.setObjectName("HelpBadge")
+        self.clicked.connect(self._show_tooltip_now)
+
+    def _show_tooltip_now(self):
+        QToolTip.showText(QCursor.pos(), self.toolTip(), self)
+
+class CardGroup(QWidget):
+    """
+    Groupbox card with a header row (title + helpBadge) and body area.
+    """
+    def __init__(self, title: str, help_html: str, parent=None):
+        super().__init__(parent)
+        self.setObjectName("CardGroup")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
+
+        # Header row
+        hdr = QHBoxLayout()
+        lbl = QLabel(title)
+        lbl.setObjectName("CardTitle")
+        lbl.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+        hdr.addWidget(lbl, 1)
+
+        badge = HelpBadge(help_html)
+        hdr.addWidget(badge, 0, Qt.AlignRight | Qt.AlignVCenter)
+        root.addLayout(hdr)
+
+        # Body
+        self.form = QFormLayout()
+        self.form.setLabelAlignment(Qt.AlignRight)
+        root.addLayout(self.form)
+
+def add_card_shadow(w):
+    fx = QGraphicsDropShadowEffect(w)
+    fx.setBlurRadius(18)
+    fx.setOffset(0, 6)
+    fx.setColor(QColor(0, 0, 0, 110))
+    w.setGraphicsEffect(fx)
 
 def apply_to_widgets(params: dict, wmap: dict):
     for key, val in params.items():

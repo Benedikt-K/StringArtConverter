@@ -5,7 +5,7 @@ QMainWindow {
     color: #e6edf3;
 }
 QWidget {
-    background: #0b0c10;         /* <- default to dark everywhere */
+    background: #0b0c10;
     color: #e6edf3;
 }
 
@@ -17,18 +17,13 @@ QScrollArea QWidget {
     background: #0b0c10;
 }
 
-/* Right panel explicit (in case you name the container) */
-#RightPanel {
-    background: #0b0c10;
-}
-
-/* Card-like groups */
+/* Group boxes */
 QGroupBox {
     margin-top: 14px;
     border: 1px solid #2b2f36;
     border-radius: 10px;
     padding: 12px;
-    background-color: #1c1f26;   /* lighter card on dark surface */
+    background-color: #1c1f26;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
@@ -90,7 +85,7 @@ QProgressBar::chunk {
     border-radius: 8px;
 }
 
-/* primary CTA button */
+/* primary convert button */
 QPushButton#btn_convert {
     background-color: #1f6feb;
     color: #ffffff;
@@ -104,42 +99,42 @@ QPushButton#btn_convert:disabled {
     color: #9aa4ad;
 }
 
-/* Modern circular checkboxes with strong contrast */
+/* checkboxes */
 QCheckBox {
     spacing: 10px;
     color: #e6edf3;
     font-size: 13px;
 }
 
-/* base (unchecked) */
+/* unchecked */
 QCheckBox::indicator {
     width: 18px;
     height: 18px;
     border-radius: 9px;
-    border: 2px solid #2b2f36;      /* visible ring */
-    background: #0f1116;            /* inner fill */
+    border: 2px solid #2b2f36;
+    background: #0f1116;
     margin-top: 2px;
 }
 
 /* hover while unchecked */
 QCheckBox::indicator:hover {
-    border-color: #5a6472;          /* a bit brighter ring on hover */
+    border-color: #5a6472;
     background: #11151c;
 }
 
-/* CHECKED: high-contrast border + solid fill */
+/* checked */
 QCheckBox::indicator:checked {
-    background: #1f6feb;            /* brand fill */
-    border: 2px solid #0b2e7a;      /* darker ring for higher contrast */
+    background: #1f6feb;
+    border: 2px solid #0b2e7a;
 }
 
-/* hover while CHECKED: brighter fill + lighter border */
+/* hover while checked */
 QCheckBox::indicator:checked:hover {
-    background: #2a7ef0;            /* lift the fill on hover */
-    border-color: #1348b5;          /* lighten the ring a bit */
+    background: #2a7ef0;
+    border-color: #1348b5;
 }
 
-/* pressed feedback (optional) */
+/* pressed feedback */
 QCheckBox::indicator:checked:pressed {
     background: #1a63d8;
     border-color: #0a2770;
@@ -149,7 +144,7 @@ QCheckBox::indicator:pressed {
     border-color: #4b5563;
 }
 
-/* indeterminate (optional) */
+/* indeterminate */
 QCheckBox::indicator:indeterminate {
     border: 2px solid #8ab4f8;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
@@ -163,5 +158,89 @@ QCheckBox::indicator:disabled {
 }
 QCheckBox:disabled {
     color: #9aa4ad;
+}
+
+/* Cards */
+#CardGroup {
+    background: #0b0c10;
+    border: 1px solid #2b2f36;
+    border-radius: 10px;
+}
+#CardTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+}
+#HelpBadge {
+    border: 1px solid #3b82f6;
+    border-radius: 11px;
+    background: #0b0c10;
+    color: #3b82f6;
+    font-weight: 700;
+    padding: 0;
+}
+#HelpBadge:hover {
+    background: #1f6feb;
+    color: #ffffff;
+    border-color: #93c5fd;
+}
+#HelpBadge:pressed {
+    background: #194fb6;
+}
+
+/* Global tooltip */
+QToolTip {
+    background-color: #111318;
+    color: #e6edf3;
+    border: 1px solid #3b82f6;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+/* Modern dark combobox with a proper arrow area */
+QComboBox {
+    background: #111318;
+    color: #e6edf3;
+    border: 1px solid #2b2f36;
+    border-radius: 8px;
+    padding: 6px 34px 6px 10px;   /* <- room for arrow */
+    min-height: 30px;
+}
+QComboBox:hover { 
+    border-color: #3b82f6;
+}
+QComboBox:disabled {
+    background: #0e1014;
+    color: #9aa4ad;
+    border-color: #1e2128;
+}
+
+/* Right "arrow area" */
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 28px;
+    border-left: 1px solid #2b2f36;
+    background: #111318;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+/* Popup list */
+QComboBox QAbstractItemView {
+    background: #0b0c10;
+    color: #e6edf3;
+    border: 1px solid #2b2f36;
+    selection-background-color: #1f6feb;
+    selection-color: #ffffff;
+    outline: 0;
+    padding: 4px;
+}
+QComboBox QAbstractItemView::item {
+    padding: 6px 8px; 
+}
+QComboBox QAbstractItemView::item:hover {
+    background: #111827;
 }
 """
