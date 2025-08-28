@@ -6,9 +6,6 @@ UI:
     top left menu hover color change
 
 other:
-    add explanation in window (add "?" over or click to get info)
-        explain each parameter shortly
     add options:
-        save path
         load path
         select saved path, give instructions for reproducing irl

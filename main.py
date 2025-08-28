@@ -1,15 +1,15 @@
 from __future__ import annotations
 import sys
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
 from StringArtConverter.UI.main_window import MainWindow
 
 # region ----------- main -----------
 def main():
     app = QApplication(sys.argv)
-    app.setApplicationName("String Art — GUI")
+    app.setApplicationName("String Art Converter")
 
-    # optional window icon if you have one:
-    # app.setWindowIcon(QIcon("icon.png"))
+    app.setWindowIcon(QIcon("icon.png"))
 
     w = MainWindow()
     w.show()
