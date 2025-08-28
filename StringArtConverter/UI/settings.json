@@ -56,27 +56,35 @@
     {
       "name": "Balanced Portrait",
       "params": {
+        "pp_clahe": false,
+        "pp_contrast": false,
         "pp_edges": true,
-        "pp_edge_weight": 0.2,
+        "pp_rembg": true,
+        "line_weight": 8.0,
+        "pp_rembg_dim": 0.45,
+        "pp_edge_weight": 0.25,
         "pp_gamma": 0.8,
-        "line_weight": 1.0,
         "min_distance": 30,
         "last_n": 20
       }
     },
     {
-      "name": "Bright faces",
+      "name": "Bright Face",
       "params": {
-        "pp_edges": false,
-        "pp_contrast": true,
-        "pp_c_low": 3.0,
-        "pp_c_high": 97.0,
-        "pp_gamma": 1.25,
-        "line_weight": 7.0
+        "pp_clahe": false,
+        "pp_contrast": false,
+        "pp_edges": true,
+        "pp_rembg": true,
+        "pp_rembg_dim": 0.3,
+        "pp_edge_weight": 0.25,
+        "pp_clip_high": 97.5,
+        "pp_gamma": 0.5,
+        "min_distance": 30,
+        "line_weight": 8.0
       }
     },
     {
-    "name": "test",
+    "name": "Bright Backgound",
     "params": {
       "pins": 300,
       "steps": 4000,

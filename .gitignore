@@ -109,3 +109,7 @@ path.txt
 *.sublime-workspace
 *.sublime-project
 
+face batch/best params.txt
+face batch/params.txt
+obama batch/best params.txt
+obama batch/params.txt

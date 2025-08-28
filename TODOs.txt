@@ -1,23 +1,17 @@
  solver:
-    multi-pass / mulsti-string
-    other search strategies?
     angle penalty?
-    adaptice ink?
+    adaptive ink?
     anti-ring diffusion
-
-automatization:
-    maybe add some mechanism to detect what params are needed for best result
 
 UI:
     preview of where circle is gonna be
     size/position options in the image selection
     progress bar:
         "draw as the lines are calculated"
-    explain each parameter shortly
-    --> fix init of slider values and box checking
 
 other:
     add explanation in window (add "?" over or click to get info)
+        explain each parameter shortly
     add options:
         save path
         load path
