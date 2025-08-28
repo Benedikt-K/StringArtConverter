@@ -1,13 +1,10 @@
- solver:
-    angle penalty?
-    adaptive ink?
-    anti-ring diffusion
-
 UI:
     preview of where circle is gonna be
     size/position options in the image selection
     progress bar:
         "draw as the lines are calculated"
+    make box next to slider to input exact values
+    sliders dont apply steps
 
 other:
     add explanation in window (add "?" over or click to get info)

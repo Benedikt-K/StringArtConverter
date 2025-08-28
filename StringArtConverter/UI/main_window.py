@@ -316,7 +316,7 @@ class MainWindow(QMainWindow):
         self.combo_preset.currentIndexChanged[int].connect(self._on_preset_changed)
 
     def _group_source(self) -> QGroupBox:
-        g = QGroupBox("Image / Preprocessing")
+        g = QGroupBox("Image preprocessing options")
         f = QFormLayout(g)
         f.setLabelAlignment(Qt.AlignRight)
 
@@ -325,11 +325,11 @@ class MainWindow(QMainWindow):
         f.addRow("Work size:", self.sld_work)
 
         # CLAHE
-        self.chk_clahe = QCheckBox("CLAHE (local contrast)")
-        f.addRow("", self.chk_clahe)
+        self.chk_clahe = QCheckBox("CLAHE")
+        f.addRow(self.chk_clahe)
 
         # Contrast stretch (float sliders)
-        self.chk_contrast = QCheckBox("Contrast stretch (percentiles)")
+        self.chk_contrast = QCheckBox("Contrast stretch")
         self.sld_low = FloatSlider(0.0, 50.0, 0.0, step=0.5, suffix=" %")
         self.sld_high = FloatSlider(50.0, 100.0, 80.0, step=0.5, suffix=" %")
         f.addRow(self.chk_contrast)
@@ -337,13 +337,13 @@ class MainWindow(QMainWindow):
         f.addRow("High percentile:", self.sld_high)
 
         # Edges
-        self.chk_edges = QCheckBox("Blend Canny edges")
+        self.chk_edges = QCheckBox("Blend edges")
         self.sld_edge_weight = FloatSlider(0.0, 1.0, 0.35, step=0.01)
         f.addRow(self.chk_edges)
         f.addRow("Edge weight:", self.sld_edge_weight)
 
         # Background dim via rembg
-        self.chk_rembg = QCheckBox("Darken background (rembg)")
+        self.chk_rembg = QCheckBox("Darken background")
         self.sld_rembg_dim = FloatSlider(0.0, 1.0, 0.6, step=0.05)
         self.sld_rembg_feather = IntSlider(0, 64, 8, suffix=" px", tick=4)
         self.sld_rembg_erode = IntSlider(0, 8, 1, suffix=" px")
@@ -358,7 +358,7 @@ class MainWindow(QMainWindow):
         return g
 
     def _group_solver(self) -> QGroupBox:
-        g = QGroupBox("Solver")
+        g = QGroupBox("General options")
         f = QFormLayout(g)
         f.setLabelAlignment(Qt.AlignRight)
 
@@ -377,7 +377,7 @@ class MainWindow(QMainWindow):
         return g
 
     def _group_preview(self) -> QGroupBox:
-        g = QGroupBox("Preview")
+        g = QGroupBox("Preview options")
         f = QFormLayout(g)
         f.setLabelAlignment(Qt.AlignRight)
 
@@ -385,7 +385,7 @@ class MainWindow(QMainWindow):
         self.sld_gamma = FloatSlider(0.5, 3.0, 1.20, step=0.05)
         self.sld_thick = IntSlider(1, 5, 1)
 
-        f.addRow("Darken per line:", self.sld_alpha)
+        f.addRow("Darken per string:", self.sld_alpha)
         f.addRow("Gamma:", self.sld_gamma)
         f.addRow("Line thickness:", self.sld_thick)
 
@@ -394,7 +394,7 @@ class MainWindow(QMainWindow):
         self.btn_save_preview = QPushButton("Save Preview…")
         self.btn_save_preview.clicked.connect(self.save_preview)
         self.btn_save_preview.setEnabled(False)
-        self.btn_export_path = QPushButton("Export Path (CSV)…")
+        self.btn_export_path = QPushButton("Export Path…")
         self.btn_export_path.clicked.connect(self.export_path)
         self.btn_export_path.setEnabled(False)
         row.addWidget(self.btn_save_preview)
@@ -668,10 +668,10 @@ class MainWindow(QMainWindow):
             "pp_edges":        [True],
             "pp_edge_weight":  [0.25],
 
-            "pp_clahe":        [True],
-            "pp_contrast":     [True],
-            "pp_c_low":        [0.0, 2.0, 5.0, 7.0, 10.0], #base["pp_c_low"]   base["pp_c_high"]
-            "pp_c_high":       [100.0, 97.0, 95.0, 93.0, 90.0],
+            "pp_clahe":        [False],
+            "pp_contrast":     [False, True],
+            "pp_c_low":        [2.0, 5.0, 10.0],
+            "pp_c_high":       [100.0, 95.0, 90.0],
 
             "pp_rembg":        [True],
             "pp_rembg_dim":    [0.3],
