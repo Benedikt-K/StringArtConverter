@@ -11,7 +11,7 @@ class IntSlider(QWidget):
     """
     valueChanged = Signal(int)
 
-    def __init__(self, minimum: int, maximum: int, value: int, *, suffix: str = "", tick: int | None = None, parent=None):
+    def __init__(self, minimum: int, maximum: int, value: int, step: int = 1, *, suffix: str = "", tick: int | None = None, parent=None):
         super().__init__(parent)
         self._suffix = suffix
         self._slider = NoWheelSlider(Qt.Horizontal)
@@ -23,8 +23,9 @@ class IntSlider(QWidget):
         lay.addWidget(self._slider, 1)
         lay.addWidget(self._label, 0)
 
-        self._slider.setRange(minimum, maximum)
-        self._slider.setValue(value)
+        self.setRange(minimum, maximum)
+        self.setValue(value)
+        self.setStep(step)
         if tick:
             self._slider.setTickInterval(int(tick))
             self._slider.setTickPosition(QSlider.TicksBelow)
@@ -35,10 +36,11 @@ class IntSlider(QWidget):
         self._slider.setRange(int(minimum), int(maximum))
         self.setValue(self.value())
 
-    def set_step(self, step: int):
+    def setStep(self, step: int):
         self._slider.setPageStep(max(1, int(step)))
 
     def _on_change(self, v: int):
+        v = self.apply_step_size(v)
         self._label.setText(f"{v}{self._suffix}")
         self.valueChanged.emit(v)
 
@@ -46,11 +48,23 @@ class IntSlider(QWidget):
         return int(self._slider.value())
 
     def setValue(self, v: int):
+        v = self.apply_step_size(v)
         self._slider.setValue(int(v))
 
     def setEnabled(self, e: bool):
         self._slider.setEnabled(e)
         self._label.setEnabled(e)
+
+    def apply_step_size(self, v: int) -> int:
+        # round to nearest step value
+        minimum = self._slider.minimum()
+        maximum = self._slider.maximum()
+        step = self._slider.pageStep()
+
+        v = int(round((v - minimum) / step) * step + minimum)
+        v = max(minimum, min(maximum, v))
+        return v
+
 
 
 class FloatSlider(QWidget):
@@ -74,6 +88,7 @@ class FloatSlider(QWidget):
         lay.addWidget(self._slider, 1)
         lay.addWidget(self._label, 0)
 
+        self._step = float(step)
         self.set_step(step)
         self._slider.setRange(minimum, maximum)
         self._slider.setValue(value)
@@ -103,7 +118,7 @@ class FloatSlider(QWidget):
 
     def _on_change(self, raw: int):
         v = self._min + raw / self._scale
-        v = max(self._min, min(self._max, v))
+        v = self.apply_step_size(v)
         self._label.setText(self._fmt(v))
         self.valueChanged.emit(v)
 
@@ -112,9 +127,16 @@ class FloatSlider(QWidget):
         return self._min + raw / self._scale
 
     def setValue(self, v: float):
-        v = max(self._min, min(self._max, v))
+        v = self.apply_step_size(v)
         self._slider.setValue(int(round((v - self._min) * self._scale)))
 
     def setEnabled(self, e: bool):
         self._slider.setEnabled(e)
         self._label.setEnabled(e)
+
+    def apply_step_size(self, v: float) -> float:
+        """Round value to nearest step within range"""
+        step = self._step
+        v = round((v - self._min) / step) * step + self._min
+        v = max(self._min, min(self._max, v))
+        return v

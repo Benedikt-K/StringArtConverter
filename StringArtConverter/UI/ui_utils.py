@@ -107,8 +107,8 @@ def set_widget_ranges(ranges: dict, wmap: dict):
         if isinstance(w, IntSlider):
             if lo is not None and hi is not None:
                 w.setRange(int(lo), int(hi))
-            if step is not None and hasattr(w, "set_step"):
-                w.set_step(int(step))
+            if step is not None:
+                w.setStep(int(step))
             continue
 
         if isinstance(w, FloatSlider):

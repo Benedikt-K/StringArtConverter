@@ -228,8 +228,7 @@ class MainWindow(QMainWindow):
         self.guided_path: list[tuple[int, int]] = []
         self.guided_pins: Optional[np.ndarray] = None
         self.guided_work_size: int = 0
-        self.guided_index: int = 0
-        self.guided_playing = False
+        self.guided_index: int = -1
 
         self.setAcceptDrops(True)
 
@@ -278,11 +277,6 @@ class MainWindow(QMainWindow):
         right_layout.addLayout(run_row)
         right_layout.addStretch(1)
         right_layout.setAlignment(Qt.AlignTop)
-
-        # controls
-        title = QLabel("Controls")
-        title.setObjectName("TitleLabel")
-        right_layout.addWidget(title)
 
         # preview
         self.group_preview = self._group_preview()
@@ -619,8 +613,7 @@ class MainWindow(QMainWindow):
         self.guided_path = path
         self.guided_pins = pins
         self.guided_work_size = self.current_work_size
-        self.guided_index = 0
-        self.guided_playing = False
+        self.guided_index = -1
         self._setup_guide_ui()
         self._render_guide()
 
@@ -888,7 +881,7 @@ class MainWindow(QMainWindow):
     def _update_step_label(self):
         N = len(self.guided_path)
         i = self.guided_index
-        self.lbl_step.setText(f"Step: {i} / {N}")
+        self.lbl_step.setText(f"Step: {i + 1} / {N}")
         if 0 <= i < N:
             a, b = self.guided_path[i]
             self.lbl_next.setText(f"Next: {a} → {b}")
@@ -920,10 +913,7 @@ class MainWindow(QMainWindow):
             self.spin_step.setValue(self.guided_index)
             self.spin_step.blockSignals(False)
             self._render_guide()
-        else:
-            # stop at the end if playing
-            if self.guided_playing:
-                self._toggle_play(force=False)
+
 
     def _guided_save_session(self):
         if not self.guided_path or self.guided_pins is None:

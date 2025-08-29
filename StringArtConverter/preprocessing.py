@@ -10,9 +10,17 @@ except Exception:
 
 def resize_square(img_bgr: np.ndarray, size: int) -> np.ndarray:
     """
-    Resize image to the desired size
+    Center crop image then resize to the desired size
     """
-    return cv2.resize(img_bgr, (size, size), interpolation=cv2.INTER_AREA)
+    h, w = img_bgr.shape[:2]
+    side = min(h, w)
+
+    y0 = (h - side) // 2
+    x0 = (w - side) // 2
+
+    square = img_bgr[y0:y0 + side, x0:x0 + side]
+
+    return cv2.resize(square, (size, size), interpolation=cv2.INTER_AREA)
 
 def to_gray_u8(img_bgr: np.ndarray) -> np.ndarray:
     """

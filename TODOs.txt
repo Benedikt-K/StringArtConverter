@@ -1,7 +1,4 @@
 UI:
-    preview of where circle is gonna be
-    size/position options in the image selection
-    make box next to slider to input exact values
     sliders dont apply steps
     delete batch convert button again
 
@@ -13,3 +10,11 @@ other:
     main window refactor, move methods out
 
     make load path/session available rom start
+
+    consistent function naming
+
+    clicking in slider to instantly change values to there??
+
+    adjust step sizes (pins, line weight)
+
+    add button/check show guided/full iamge, so can see full image again after starting guided build
