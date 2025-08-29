@@ -34,3 +34,4 @@ def render_path(work_size,
 
     img = (255.0 * (1.0 - acc)).astype(np.uint8)
     return img
+

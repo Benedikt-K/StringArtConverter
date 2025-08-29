@@ -9,20 +9,20 @@ from itertools import product
 
 # -------- UI ----------
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QSize
-from PySide6.QtGui import QAction, QPixmap, QImage, QIcon
+from PySide6.QtGui import QAction, QPixmap, QImage
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton, QFileDialog,
     QVBoxLayout, QHBoxLayout, QCheckBox,QGroupBox, QProgressBar, 
-    QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout
+    QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout, QSpinBox, QFormLayout
 )
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
 from StringArtConverter.UI.ui_utils import ClickableLabel, CardGroup, apply_to_widgets, set_widget_ranges, add_card_shadow
 
 # -------- solver imports --------
 from StringArtConverter.preprocessing import build_brightness_for_solver
-from StringArtConverter.utils import load_presets_json, clamp_to_ranges, Segment
+from StringArtConverter.utils import load_presets_json, clamp_to_ranges, read_path_csv, save_session_json, load_session_json, Segment
 from StringArtConverter.previewer import render_path
-from StringArtConverter.solver import solve_string_art_go
+from StringArtConverter.solver import solve_string_art_go, pin_positions_circle
 
 # -------- APP STYLES --------
 from StringArtConverter.UI.app_styles import APP_STYLES
@@ -225,6 +225,12 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._build_menu()
 
+        self.guided_path: list[tuple[int, int]] = []
+        self.guided_pins: Optional[np.ndarray] = None
+        self.guided_work_size: int = 0
+        self.guided_index: int = 0
+        self.guided_playing = False
+
         self.setAcceptDrops(True)
 
     # ----------- UI layout -----------
@@ -303,6 +309,10 @@ class MainWindow(QMainWindow):
         scroll.viewport().setAttribute(Qt.WA_StyledBackground, True)
         scroll.setWidget(right_panel)
 
+        # guided
+        self.group_guided = self._group_guided()
+        right_layout.addWidget(self.group_guided)
+
         main.addWidget(self.image_label, 2)
         main.addWidget(scroll, 1)
         self.setCentralWidget(root)
@@ -312,11 +322,13 @@ class MainWindow(QMainWindow):
         add_card_shadow(self.group_solver)
         add_card_shadow(self.group_source)
         add_card_shadow(self.combo_preset)
+        add_card_shadow(self.group_guided)
 
         # connect presets
         self._build_wmap()
         self._load_presets_json()
         self.combo_preset.currentIndexChanged[int].connect(self._on_preset_changed)
+        self._set_guided_enabled(False)
 
     def _group_source(self) -> QGroupBox:
         help_html = (
@@ -421,6 +433,70 @@ class MainWindow(QMainWindow):
         row.addWidget(self.btn_save_preview)
         row.addWidget(self.btn_export_path)
         f.addRow(row)
+        return card
+    
+    def _group_guided(self) -> QGroupBox:
+        help_html = (
+            "<b>Guided build</b><br>"
+            "<u>Step</u>: displays what the current step is.<br>"
+            "<u>Next</u>: what the next line needs to be (from → to).<br>"
+            "<u>Jump to step</u>: jump to the specified step (with ENTER or 'Go').<br>"
+            "<u>Prev</u>: jumps one step back.<br>"
+            "<u>Next</u>: jumps one step further.<br>"
+            "<u>Load Path</u>: loads the path from the specified CSV file.<br>"
+            "<u>Save Session</u>: save the current guided building session, so you can continue later.<br>"
+            "<u>Load Session</u>: loads a guided building session from s specified file."
+        )
+        card = CardGroup("Guided Build", help_html)
+        f = card.form
+        f.setLabelAlignment(Qt.AlignRight)
+
+        # current step + next pin-to-pin
+        self.lbl_step = QLabel("Step: - / -")
+        self.lbl_next = QLabel("Next: - → -")
+        f.addRow(self.lbl_step, self.lbl_next)
+
+        # Prev/Next row
+        row_nav = QHBoxLayout()
+        self.btn_prev = QPushButton("◀ Prev")
+        self.btn_next = QPushButton("Next ▶")
+        self.btn_prev.clicked.connect(self._step_prev)
+        self.btn_next.clicked.connect(self._step_next)
+        row_nav.addWidget(self.btn_prev)
+        row_nav.addWidget(self.btn_next)
+        row_nav.addStretch(1)
+        f.addRow(row_nav)
+
+        # jump-to input
+        row_step = QHBoxLayout()
+        self.spin_step = QSpinBox()
+        self.spin_step.setRange(0, 0)  # set real range in _setup_guide_ui()
+        self.spin_step.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        self.spin_step.setMinimumWidth(90)
+        self.btn_step_go = QPushButton("Jump")
+        self.btn_step_go.setFixedWidth(56)
+        self.btn_step_go.clicked.connect(self._on_step_jump)
+        self.spin_step.editingFinished.connect(self._on_step_jump)
+
+        row_step.addWidget(QLabel("Jump to step:"))
+        row_step.addWidget(self.spin_step, 0)
+        row_step.addWidget(self.btn_step_go, 0)
+        row_step.addStretch(1)
+        f.addRow(row_step)
+
+        # persistence row (optional; leave connected if you already have handlers)
+        row_io = QHBoxLayout()
+        self.btn_load_path = QPushButton("Load Path…")
+        self.btn_save_session = QPushButton("Save Session…")
+        self.btn_load_session = QPushButton("Load Session…")
+        self.btn_load_path.clicked.connect(self._guided_load_path)
+        self.btn_save_session.clicked.connect(self._guided_save_session)
+        self.btn_load_session.clicked.connect(self._guided_load_session)
+        row_io.addWidget(self.btn_load_path)
+        row_io.addWidget(self.btn_save_session)
+        row_io.addWidget(self.btn_load_session)
+        f.addRow(row_io)
+
         return card
 
     # ----------- Menu -----------
@@ -536,6 +612,15 @@ class MainWindow(QMainWindow):
         self.current_path = path
         self.current_pins = pins
         self.current_work_size = target.shape[0] if target.ndim == 2 else int(math.sqrt(target.size))
+
+        # guided params
+        self.guided_path = path
+        self.guided_pins = pins
+        self.guided_work_size = self.current_work_size
+        self.guided_index = 0
+        self.guided_playing = False
+        self._setup_guide_ui()
+        self._render_guide()
 
         self.btn_convert.setEnabled(True)
         self.btn_save_preview.setEnabled(bool(path))
@@ -778,5 +863,187 @@ class MainWindow(QMainWindow):
         self.btn_convert.setEnabled(True)
         self.btn_batch.setEnabled(True)
         info(self, "Batch done", f"Saved previews and params.txt to:\n{out_dir}")
+
+    # --------------- Guided methods -----------------------
+    def _set_guided_enabled(self, on: bool):
+        for w in (self.lbl_step, self.lbl_next,
+                self.spin_step, self.btn_step_go,
+                self.btn_prev, self.btn_next,
+                self.btn_load_path, self.btn_save_session, self.btn_load_session):
+            w.setEnabled(on)
+
+    def _setup_guide_ui(self):
+        N = len(self.guided_path)
+        self.spin_step.blockSignals(True)
+        self.spin_step.setRange(0, max(0, N))
+        # keep current index if valid; else reset
+        v = self.guided_index if 0 <= self.guided_index <= N else 0
+        self.spin_step.setValue(v)
+        self.spin_step.blockSignals(False)
+        self._set_guided_enabled(N > 0)
+        self._update_step_label()
+
+    def _update_step_label(self):
+        N = len(self.guided_path)
+        i = self.guided_index
+        self.lbl_step.setText(f"Step: {i} / {N}")
+        if 0 <= i < N:
+            a, b = self.guided_path[i]
+            self.lbl_next.setText(f"Next: {a} → {b}")
+        else:
+            self.lbl_next.setText("Next: - → -")
+
+    def _on_step_jump(self):
+        N = len(self.guided_path)
+        v = int(self.spin_step.value())
+        v = max(0, min(N, v))
+        if v != self.guided_index:
+            self.guided_index = v
+            self._render_guide()
+        else:
+            self._update_step_label()
+
+    def _step_prev(self):
+        if self.guided_index > 0:
+            self.guided_index -= 1
+            self.spin_step.blockSignals(True)
+            self.spin_step.setValue(self.guided_index)
+            self.spin_step.blockSignals(False)
+            self._render_guide()
+
+    def _step_next(self):
+        if self.guided_index < len(self.guided_path):
+            self.guided_index += 1
+            self.spin_step.blockSignals(True)
+            self.spin_step.setValue(self.guided_index)
+            self.spin_step.blockSignals(False)
+            self._render_guide()
+        else:
+            # stop at the end if playing
+            if self.guided_playing:
+                self._toggle_play(force=False)
+
+    def _guided_save_session(self):
+        if not self.guided_path or self.guided_pins is None:
+            info(self, "No session", "Run a conversion or load a path first.")
+            return
+        path, _ = QFileDialog.getSaveFileName(self, "Save session", "session.json", "JSON (*.json)")
+        if not path:
+            return
+        import json
+        data = {
+            "work_size": self.guided_work_size,
+            "index": self.guided_index,
+            "pins": self.guided_pins.tolist(),
+            "path": self.guided_path,
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            info(self, "Saved", f"Session saved to:\n{path}")
+        except Exception as e:
+            error(self, "Save failed", str(e))
+
+    def _guided_load_session(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Load session", "", "JSON (*.json)")
+        if not path:
+            return
+        import json
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            self.guided_work_size = int(data["work_size"])
+            self.guided_index = int(data.get("index", 0))
+            self.guided_pins = np.asarray(data["pins"], dtype=np.int32)
+            self.guided_path = [tuple(x) for x in data["path"]]
+            self._setup_guide_ui()
+            self._render_guide()
+            info(self, "Loaded", f"Session loaded:\n{path}")
+        except Exception as e:
+            error(self, "Load failed", str(e))
+
+    def _guided_load_path(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Load path CSV", "", "CSV (*.csv *.txt)")
+        if not path:
+            return
+        import csv
+        try:
+            segs = []
+            with open(path, "r", encoding="utf-8") as f:
+                reader = csv.reader(f)
+                # skip header if present
+                first = next(reader)
+                try:
+                    a, b = int(first[0]), int(first[1])
+                    segs.append((a, b))
+                except Exception:
+                    pass  # header line; ignore
+                for row in reader:
+                    if len(row) < 2:
+                        continue
+                    segs.append((int(row[0]), int(row[1])))
+
+            if not segs or self.current_pins is None:
+                warn(self, "Load path", "No segments or no current pins available.")
+                return
+
+            self.guided_path = segs
+            self.guided_pins = self.current_pins if self.current_pins is not None else self.guided_pins
+            self.guided_work_size = self.current_work_size if self.current_work_size else self.guided_work_size
+            self.guided_index = 0
+            self._setup_guide_ui()
+            self._render_guide()
+            info(self, "Loaded", f"Loaded {len(segs)} segments from:\n{path}")
+        except Exception as e:
+            error(self, "Load failed", str(e))
+
+    def _render_guide(self):
+        if self.guided_pins is None or self.guided_work_size <= 0:
+            return
+        N = len(self.guided_path)
+        k = max(0, min(self.guided_index, N))
+
+        # draw segments [0..k-1]
+        past_path = self.guided_path[:k]
+        preview_u8 = render_path(
+            work_size=self.guided_work_size,
+            pins=self.guided_pins,
+            path=past_path,
+            alpha_per_line=self.sld_alpha.value(),
+            gamma=self.sld_gamma.value(),
+            thickness=self.sld_thick.value(),
+        )
+
+        # convert base grayscale to RGB
+        disp = np.dstack([preview_u8] * 3)
+
+        # circular board mask (same as in render_path)
+        H = W = self.guided_work_size
+        yy, xx = np.ogrid[:H, :W]
+        cx, cy = W * 0.5, H * 0.5
+        r = min(H, W) * 0.5 - 16
+        board = ((xx - cx) ** 2 + (yy - cy) ** 2) <= r * r
+
+        # draw next segment in blue
+        if k < N:
+            a, b = self.guided_path[k]
+            x0, y0 = int(self.guided_pins[a][0]), int(self.guided_pins[a][1])
+            x1, y1 = int(self.guided_pins[b][0]), int(self.guided_pins[b][1])
+
+            # draw directly on the RGB image
+            overlay = disp.copy()
+            cv2.line(
+                overlay,
+                (x0, y0),
+                (x1, y1),
+                (0, 140, 255),
+                thickness=self.sld_thick.value(),
+                lineType=cv2.LINE_AA,
+            )
+
+            disp[board] = overlay[board]
+
+        self.image_label.setPixmap(to_qpixmap_from_rgb(disp, self.image_label.size()))
+        self._update_step_label()
 
 # endregion

@@ -4,10 +4,12 @@ UI:
     make box next to slider to input exact values
     sliders dont apply steps
     top left menu hover color change
+    buttons dont have correct color if pressable
+    delete batch convert button again
 
 other:
-    add options:
-        load path
-        select saved path, give instructions for reproducing irl
     finish gitignore
     proper documentation
+    add pin numbers ob preview circle?
+
+    main window refactor, move methods out
