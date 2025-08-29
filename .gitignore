@@ -102,6 +102,7 @@ output/
 results/
 # output
 path.txt
+session.json
 
 # ---- IDE ----
 .idea/
