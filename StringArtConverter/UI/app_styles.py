@@ -146,7 +146,7 @@ QPushButton#btn_convert {
     background-color: #1f6feb;
     color: #ffffff;
     border: 1px solid #2b2f36;
-    border-radius: 12px;
+    border-radius: 18px;
     padding: 10px 16px;
     font-weight: 600;
 }

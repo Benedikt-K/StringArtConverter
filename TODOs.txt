@@ -3,8 +3,6 @@ UI:
     size/position options in the image selection
     make box next to slider to input exact values
     sliders dont apply steps
-    top left menu hover color change
-    buttons dont have correct color if pressable
     delete batch convert button again
 
 other:
@@ -13,3 +11,5 @@ other:
     add pin numbers ob preview circle?
 
     main window refactor, move methods out
+
+    make load path/session available rom start

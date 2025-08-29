@@ -1,6 +1,10 @@
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSlider
 
+class NoWheelSlider(QSlider):
+    def wheelEvent(self, e):
+        e.ignore()
+
 class IntSlider(QWidget):
     """
     Int slider that has a step size and min/max
@@ -10,7 +14,7 @@ class IntSlider(QWidget):
     def __init__(self, minimum: int, maximum: int, value: int, *, suffix: str = "", tick: int | None = None, parent=None):
         super().__init__(parent)
         self._suffix = suffix
-        self._slider = QSlider(Qt.Horizontal)
+        self._slider = NoWheelSlider(Qt.Horizontal)
         self._label = QLabel(f"{value}{suffix}")
         self._label.setMinimumWidth(72)
 
@@ -61,7 +65,7 @@ class FloatSlider(QWidget):
         super().__init__(parent)
         self._decimals = decimals if decimals is not None else max(0, len(str(step).split(".")[-1]))
         self._suffix = suffix
-        self._slider = QSlider(Qt.Horizontal)
+        self._slider = NoWheelSlider(Qt.Horizontal)
         self._label = QLabel(self._fmt(value))
         self._label.setMinimumWidth(72)
 

@@ -277,6 +277,7 @@ class MainWindow(QMainWindow):
         run_row.addWidget(self.progress, 1)
         right_layout.addLayout(run_row)
         right_layout.addStretch(1)
+        right_layout.setAlignment(Qt.AlignTop)
 
         # controls
         title = QLabel("Controls")
@@ -338,7 +339,8 @@ class MainWindow(QMainWindow):
             "<u>Contrast stretch</u>: remap dark/bright percentiles ('compress' grayscale values).<br>"
             "<u>Blend edges</u>: mix edges into the target (higher = more contour bias).<br>"
             "<u>Darken background (rembg)</u>: AI background detection mask to dim background;"
-            " feather/erode refine mask."
+            "<u>Feather</u>: softens the mask edges.<br>"
+            "<u>Erode</u>: shriks the mask."
         )
         card = CardGroup("Image preprocessing options", help_html, self)
         f = card.form
@@ -372,8 +374,8 @@ class MainWindow(QMainWindow):
         self.sld_rembg_erode = IntSlider(0, 8, 1, suffix=" px")
         f.addRow(self.chk_rembg)
         f.addRow("Dim factor:", self.sld_rembg_dim)
-        f.addRow("Feather σ:", self.sld_rembg_feather)
-        f.addRow("Erode FG:", self.sld_rembg_erode)
+        f.addRow("Feather:", self.sld_rembg_feather)
+        f.addRow("Erode:", self.sld_rembg_erode)
 
         # Check ranges of sliders
         self._wire_percentile_guards()
