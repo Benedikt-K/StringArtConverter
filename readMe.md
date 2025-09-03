@@ -5,11 +5,18 @@
 Turn any image into **string art**:
 Load a photo, preprocess and generate a sequence of nail-to-nail lines.
 
-<p align="left" style="display: flex; align-items: center; justify-content: left;">
-  <img src="assets/input.jpg" alt="Original" width="15%" />
-  <span style="font-size: 48px; margin: 0 20px;">&rarr;</span>
-  <img src="assets/output.png" alt="String Art Result" width="15%" />
-</p>
+<table>
+  <tr>
+    <td><img src="assets/input.jpg" alt="Original" width="260"></td>
+    <td align="center"><h1>&rarr;</h1></td>
+    <td><img src="assets/output.png" alt="String Art Result" width="260"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>Before</em></td>
+    <td></td>
+    <td align="center"><em>After</em></td>
+  </tr>
+</table>
 
 
 # Features
