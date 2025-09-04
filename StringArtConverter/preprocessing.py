@@ -33,7 +33,7 @@ def apply_clahe(gray_u8: np.ndarray, clip: float = 2.0, tiles: int = 8) -> np.nd
     return clahe.apply(gray_u8)
 
 def contrast_stretch(gray_u8: np.ndarray, p_low: float = 2.0, p_high: float = 98.0) -> np.ndarray:
-    # percentile-based min/max → stretch to [0,255]
+    # percentile-based min/max, stretch to [0,255]
     lo = np.percentile(gray_u8, np.clip(p_low, 0, 50))
     hi = np.percentile(gray_u8, np.clip(p_high, 50, 100))
     if hi <= lo + 1e-6:

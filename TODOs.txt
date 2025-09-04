@@ -1,5 +1,4 @@
 UI:
-    sliders dont apply steps
     delete batch convert button again
 
 other:
@@ -12,9 +11,3 @@ other:
     make load path/session available rom start
 
     consistent function naming
-
-    clicking in slider to instantly change values to there??
-
-    adjust step sizes (pins, line weight)
-
-    add button/check show guided/full iamge, so can see full image again after starting guided build

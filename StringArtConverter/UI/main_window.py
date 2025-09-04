@@ -229,6 +229,7 @@ class MainWindow(QMainWindow):
         self.guided_pins: Optional[np.ndarray] = None
         self.guided_work_size: int = 0
         self.guided_index: int = -1
+        self.is_render_guided: bool = False
 
         self.setAcceptDrops(True)
 
@@ -433,34 +434,44 @@ class MainWindow(QMainWindow):
     
     def _group_guided(self) -> QGroupBox:
         help_html = (
-            "<b>Guided build</b><br>"
+            "<b>Pin-by-pin build</b><br>"
             "<u>Step</u>: displays what the current step is.<br>"
             "<u>Next</u>: what the next line needs to be (from → to).<br>"
-            "<u>Jump to step</u>: jump to the specified step (with ENTER or 'Go').<br>"
             "<u>Prev</u>: jumps one step back.<br>"
             "<u>Next</u>: jumps one step further.<br>"
+            "<u>Switch Preview</u>: Switches the preview between the completed image and the current pin-by-pin step.<br>"
+            "<u>Jump to step</u>: jump to the specified step (with ENTER or 'Go').<br>"
             "<u>Load Path</u>: loads the path from the specified CSV file.<br>"
-            "<u>Save Session</u>: save the current guided building session, so you can continue later.<br>"
-            "<u>Load Session</u>: loads a guided building session from s specified file."
+            "<u>Save Session</u>: save the current pin-by-pin building session, so you can continue later.<br>"
+            "<u>Load Session</u>: loads a guided pin-by-pin session from a specified file."
         )
         card = CardGroup("Guided Build", help_html)
         f = card.form
         f.setLabelAlignment(Qt.AlignRight)
 
-        # current step + next pin-to-pin
+        # current step + next pin-to-pin + switch preview
+        row_upper = QHBoxLayout()
         self.lbl_step = QLabel("Step: - / -")
         self.lbl_next = QLabel("Next: - → -")
-        f.addRow(self.lbl_step, self.lbl_next)
+        self.lbl_switch = QLabel("Finished | Pin-by-Pin")
+        row_upper.addWidget(self.lbl_step)
+        row_upper.addWidget(self.lbl_next)
+        row_upper.addStretch()
+        row_upper.addWidget(self.lbl_switch)
+        f.addRow(row_upper)
 
-        # Prev/Next row
+        # Prev/Next/switch row buttons
         row_nav = QHBoxLayout()
-        self.btn_prev = QPushButton("◀ Prev")
-        self.btn_next = QPushButton("Next ▶")
+        self.btn_prev = QPushButton("◀  Prev")
+        self.btn_next = QPushButton("Next  ▶")
+        self.btn_switch = QPushButton("  Switch Preview  ")
         self.btn_prev.clicked.connect(self._step_prev)
         self.btn_next.clicked.connect(self._step_next)
+        self.btn_switch.clicked.connect(self._switch_preview)
         row_nav.addWidget(self.btn_prev)
         row_nav.addWidget(self.btn_next)
-        row_nav.addStretch(1)
+        row_nav.addStretch()
+        row_nav.addWidget(self.btn_switch)
         f.addRow(row_nav)
 
         # jump-to input
@@ -469,18 +480,18 @@ class MainWindow(QMainWindow):
         self.spin_step.setRange(0, 0)  # set real range in _setup_guide_ui()
         self.spin_step.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         self.spin_step.setMinimumWidth(90)
-        self.btn_step_go = QPushButton("Jump")
-        self.btn_step_go.setFixedWidth(56)
-        self.btn_step_go.clicked.connect(self._on_step_jump)
+        self.btn_jump_to = QPushButton("Jump")
+        self.btn_jump_to.setFixedWidth(56)
+        self.btn_jump_to.clicked.connect(self._on_step_jump)
         self.spin_step.editingFinished.connect(self._on_step_jump)
 
         row_step.addWidget(QLabel("Jump to step:"))
         row_step.addWidget(self.spin_step, 0)
-        row_step.addWidget(self.btn_step_go, 0)
+        row_step.addWidget(self.btn_jump_to, 0)
         row_step.addStretch(1)
         f.addRow(row_step)
 
-        # persistence row (optional; leave connected if you already have handlers)
+        # save/load guided session
         row_io = QHBoxLayout()
         self.btn_load_path = QPushButton("Load Path…")
         self.btn_save_session = QPushButton("Save Session…")
@@ -620,6 +631,7 @@ class MainWindow(QMainWindow):
         self.btn_convert.setEnabled(True)
         self.btn_save_preview.setEnabled(bool(path))
         self.btn_export_path.setEnabled(bool(path))
+        self.lbl_switch.setText('<span style="font-weight:bold;">Finished</span> | Pin-by-Pin')
 
         if not path:
             info(self, "Conversion", "No path produced (try other parameters).")
@@ -861,9 +873,9 @@ class MainWindow(QMainWindow):
 
     # --------------- Guided methods -----------------------
     def _set_guided_enabled(self, on: bool):
-        for w in (self.lbl_step, self.lbl_next,
-                self.spin_step, self.btn_step_go,
-                self.btn_prev, self.btn_next,
+        for w in (self.lbl_step, self.lbl_next, self.lbl_switch,
+                self.spin_step, self.btn_jump_to,
+                self.btn_prev, self.btn_next, self.btn_switch,
                 self.btn_load_path, self.btn_save_session, self.btn_load_session):
             w.setEnabled(on)
 
@@ -914,6 +926,26 @@ class MainWindow(QMainWindow):
             self.spin_step.blockSignals(False)
             self._render_guide()
 
+    def _switch_preview(self):
+        """
+        Switch between rendering Full preview image and guided building image
+        """
+        if self.is_render_guided:
+            self.is_render_guided = False
+            display = render_path(
+                work_size=self.current_work_size,
+                pins=self.current_pins,
+                path=self.current_path,
+                alpha_per_line=self.sld_alpha.value(),
+                gamma=self.sld_gamma.value(),
+                thickness=self.sld_thick.value(),
+            )
+            self.image_label.setPixmap(to_qpixmap_from_rgb(display, self.image_label.size()))
+            self.lbl_switch.setText('<span style="font-weight:bold;">Finished</span> | Pin-by-Pin')
+        else:
+            self.is_render_guided = True
+            self._render_guide()
+            self.lbl_switch.setText('Finished | <span style="font-weight:bold;">Pin-by-Pin</span>')
 
     def _guided_save_session(self):
         if not self.guided_path or self.guided_pins is None:
