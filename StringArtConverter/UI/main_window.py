@@ -175,7 +175,7 @@ class MainWindow(QMainWindow):
     def _group_source(self) -> QGroupBox:
         help_html = (
             "<b>Preprocessing</b><br>"
-            "<u>Work size</u>: resizing the image (higher = better quality and slower).<br>"
+            "<u>Work size</u>: resizing the image (higher = enables more lines, but gets slower).<br>"
             "<u>CLAHE</u>: local contrast equalization (can add noise).<br>"
             "<u>Contrast stretch</u>: remap dark/bright percentiles ('compress' grayscale values).<br>"
             "<u>Blend edges</u>: mix edges into the target (higher = more contour bias).<br>"
