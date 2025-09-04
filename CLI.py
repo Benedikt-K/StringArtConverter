@@ -3,9 +3,9 @@ import argparse
 import cv2, numpy as np
 from typing import Tuple, List
 
-from StringArtConverter.preprocessing import build_brightness_for_solver
+from StringArtConverter.preprocessing import build_target_for_solver
 from StringArtConverter.previewer import render_path
-from StringArtConverter.solver import solve_string_art_go
+from StringArtConverter.solver import solve_string_art
 from StringArtConverter.utils import save_path_txt
 
 # -------------------- CLI --------------------
@@ -51,7 +51,7 @@ def main():
         print(f"\rProgress: {p:3d}%", end="", flush=True)
 
     # preprocessing
-    src_u8 = build_brightness_for_solver(
+    src_u8 = build_target_for_solver(
         img_bgr=img,
         work_size=args.work_size,
         use_clahe=args.pp_clahe,
@@ -75,7 +75,7 @@ def main():
     SourceImg = src_u8.reshape(H * W).astype(np.float64)
 
     # find path
-    path, error, target, pins = solve_string_art_go(
+    path, error, target, pins = solve_string_art(
         source_brightness_u8=src_u8,
         n_pins=args.pins,
         max_lines=args.steps,

@@ -38,7 +38,7 @@ def precalc_lines(pins: np.ndarray, n_pins: int, size: int, min_distance: int):
 
 # -------------------- Core Solver --------------------
 
-def solve_string_art_go(
+def solve_string_art(
     source_brightness_u8: np.ndarray,
     n_pins: int,
     max_lines: int,

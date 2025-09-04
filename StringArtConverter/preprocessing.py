@@ -116,7 +116,7 @@ def brightness_clip(gray_u8: np.ndarray, clip_high: float = 98.0) -> np.ndarray:
     g = np.clip(gray_u8.astype(np.float32) / hi, 0, 1)
     return (g * 255.0 + 0.5).astype(np.uint8)
 
-def build_brightness_for_solver(
+def build_target_for_solver(
     img_bgr: np.ndarray,
     *,
     work_size: int,
