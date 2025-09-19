@@ -1,6 +1,7 @@
 from __future__ import annotations
 import cv2
 import numpy as np
+import mediapipe as mp
 
 try:
     from rembg import remove as rembg_remove
@@ -180,3 +181,63 @@ def build_target_for_solver(
 
     src = (255.0 * (1.0 - target_dark)).astype(np.uint8)
     return src
+
+def build_importance_map(gray: np.ndarray, worksize: int = 512) -> np.ndarray:
+    """
+    Computes importance map:
+    - Background = 0.2
+    - Foreground = 0.5
+    - Face = 1.0
+    """
+    H, W = gray.shape
+    imp = np.ones((H, W), dtype=np.float32) * 0.8 # -------Foreground = 0.8
+
+    try:
+        from rembg import remove
+        rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+        out = remove(rgb)
+        if out.ndim == 3 and out.shape[2] == 4:
+            alpha = out[:, :, 3].astype(np.float32) / 255.0
+            bg_mask = 1.0 - alpha
+            imp[bg_mask > 0.5] = 0.2    # -----Background = 0.2
+    except Exception:
+        pass
+
+    # --- 2) face detection with MediaPipe FaceMesh ---
+    mp_face_mesh = mp.solutions.face_mesh
+    with mp_face_mesh.FaceMesh(
+        static_image_mode=True,
+        max_num_faces=5,
+        min_detection_confidence=0.5,
+        refine_landmarks=False
+    ) as face_mesh:
+        rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+        results = face_mesh.process(rgb)
+
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                # collect all landmark points (normalized [0..1]) and convert to pixel coords
+                pts = []
+                for lm in face_landmarks.landmark:
+                    # clamp coordinates to image
+                    x = int(np.clip(lm.x, 0.0, 1.0) * (W - 1))
+                    y = int(np.clip(lm.y, 0.0, 1.0) * (H - 1))
+                    pts.append((x, y))
+
+                pts_arr = np.array(pts, dtype=np.int32)
+                if pts_arr.shape[0] >= 3:
+                    # convext hull is robust and gives a closed polygon for the face
+                    hull = cv2.convexHull(pts_arr)
+                    # fill hull with weight 1.0 (face)
+                    # cv2.fillConvexPoly works well here
+                    cv2.fillConvexPoly(imp, hull, 1.5) #------ Face = 1.5
+
+    # --- 3) resize to solver worksize and smooth slightly ---
+    imp_resized = cv2.resize(imp, (worksize, worksize), interpolation=cv2.INTER_LINEAR)
+    # slight gaussian blur to avoid very hard edges (tunable)
+    imp_resized = cv2.GaussianBlur(imp_resized, (0, 0), sigmaX=2.0)
+
+    # clamp to sensible bounds [0.1 .. 1.0] (ensure background at least 0.1)
+    imp_resized = np.clip(imp_resized, 0.1, 1.0).astype(np.float32)
+
+    return imp_resized

@@ -1,5 +1,6 @@
 from typing import List, Optional, Tuple
 import math, numpy as np
+import cv2
 
 from StringArtConverter.utils import Segment
 
@@ -46,7 +47,8 @@ def solve_string_art(
     min_distance: int = 30,
     line_weight: float = 8.0,
     last_n: int = 20,
-    work_size: int = 500,
+    work_size: int = 512,
+    importance_map: Optional[np.ndarray] = None,
     progress_cb: Optional[callable] = None,
 ) -> Tuple[List[Segment], np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -87,19 +89,48 @@ def solve_string_art(
     pins = pin_positions_circle(work_size, n_pins)
     line_cache = precalc_lines(pins, n_pins, work_size, min_distance)
 
+    # make sure is same size
+    gray = cv2.resize(gray, (work_size, work_size), interpolation=cv2.INTER_AREA)
+
+    if importance_map is not None and importance_map.shape != (work_size, work_size):
+        importance_map = cv2.resize(importance_map, (work_size, work_size), interpolation=cv2.INTER_NEAREST)
+
+    # Flatten arrays for line_cache indexing
+    gray = gray.astype(np.float32).ravel()
+    if importance_map is None:
+        importance_map = np.ones(work_size * work_size, dtype=np.float32)
+    else:
+        importance_map = importance_map.astype(np.float32).ravel()
+
     # error starts as (255 - brightness)
-    error = 255.0 - gray.ravel()
+    #error = 255.0 - gray.ravel()
+    max_fibers_per_pixel = 200.0
+    target_fibers = (1.0 - gray / 255.0) * max_fibers_per_pixel
+
+    # Importance map (default = 1 everywhere)
+    if importance_map is None:
+        importance_map = np.ones_like(gray, dtype=np.float32)
+
+    # Current fiber coverage
+    current_fibers = np.zeros_like(target_fibers, dtype=np.float32)
+
+    # Quadratic error (weighted)
+    error = importance_map * (target_fibers - current_fibers) ** 2
 
     path: List[Segment] = []
     current_pin = 0
     last_pins = [-1] * last_n
+
+    print("gray:", gray.shape)
+    print("importance_map:", importance_map.shape if importance_map is not None else None)
+    print("line_cache size:", max(idx.max() for idx in line_cache.values()))
 
     for step in range(max_lines):
         if progress_cb:
             progress_cb(int(100 * step / max(1, max_lines - 1)))
 
         best_pin = None
-        best_err = -1.0
+        best_gain = -1e9
         best_idx = None
 
         for offset in range(min_distance, n_pins - min_distance):
@@ -110,18 +141,25 @@ def solve_string_art(
             if idx is None:
                 continue
 
-            line_err = error[idx].sum()
-            if line_err > best_err:
-                best_err = line_err
+            old_err = error[idx].sum()
+
+            new_fibers = current_fibers[idx] + line_weight
+            new_err = (importance_map.ravel()[idx] *
+                       (target_fibers.ravel()[idx] - new_fibers) ** 2).sum()
+
+            gain = old_err - new_err
+            if gain > best_gain:
+                best_gain = gain
                 best_pin = test_pin
                 best_idx = idx
 
         if best_pin is None:
-            break
+            break   # nothing improves anymore
 
         # Apply line: subtract constant LINE_WEIGHT along the pixels
-        error[best_idx] -= float(line_weight)
-        np.maximum(error, 0.0, out=error)
+        current_fibers[best_idx] += line_weight
+        error[best_idx] = (importance_map.ravel()[best_idx] *
+                           (target_fibers.ravel()[best_idx] - current_fibers[best_idx]) ** 2)
 
         path.append((current_pin, best_pin))
         last_pins.append(best_pin)

@@ -5,9 +5,10 @@ from itertools import product
 
 from PySide6.QtCore import Signal, QObject
 
-from StringArtConverter.preprocessing import build_target_for_solver
+from StringArtConverter.preprocessing import build_target_for_solver, to_gray_u8, build_importance_map
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art
+from StringArtConverter.previewer import visualize_importance_map, visualize_target
 
 
 # region ----------- convert worker -----------
@@ -46,6 +47,17 @@ class ConvertWorker(QObject):
             def cb(p: int):
                 self.progress.emit(p)
 
+            # get importance map, gray unnötig?
+            gray = to_gray_u8(self.img_bgr)
+            importance = build_importance_map(gray, worksize=self.params["work_size"])
+
+            # debug outputs
+            imp_vis = visualize_importance_map(importance)
+            cv2.imwrite("importance_debug.png", imp_vis)
+
+            target_vis = visualize_target(gray)
+            cv2.imwrite("target_debug.png", target_vis)
+
             path, err, target, pins = solve_string_art(
                 source_brightness_u8=src_u8,
                 n_pins=self.params["pins"],
@@ -54,6 +66,7 @@ class ConvertWorker(QObject):
                 line_weight=self.params["line_weight"],
                 last_n=self.params["last_n"],
                 work_size=self.params["work_size"],
+                importance_map=importance,
                 progress_cb=cb,
             )
             self.finished.emit(path, err, target, pins)

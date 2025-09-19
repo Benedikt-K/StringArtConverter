@@ -229,7 +229,7 @@ class MainWindow(QMainWindow):
             "<u>Pins</u>: number of nails around the circle.<br>"
             "<u>Max lines</u>: number of threads to compute.<br>"
             "<u>Min distance</u>: minimum direct neighbors skipped to avoid short lines.<br>"
-            "<u>Line weight</u>: how much one thread lowers residual (higher = darker, coarser).<br>"
+            "<u>Line weight</u>: how much one thread influences residual (higher = faster convergence, but less detail gain later on).<br>"
             "<u>Cooldown last-N</u>: avoid revisiting the last N pins to reduce streaks."
         )
         card = CardGroup("General options", help_html, self)

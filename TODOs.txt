@@ -11,3 +11,6 @@ other:
     make load path/session available rom start
 
     consistent function naming
+
+
+    toggle between birhgten and darken backgound --> maybe add make more uniform?
