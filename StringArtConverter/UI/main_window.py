@@ -16,8 +16,10 @@ from PySide6.QtWidgets import (
     QMessageBox, QScrollArea, QFrame, QComboBox, QHBoxLayout, QSpinBox
 )
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
-from StringArtConverter.UI.ui_utils import ClickableLabel, CardGroup, apply_to_widgets, set_widget_ranges, add_card_shadow
-
+from StringArtConverter.UI.ui_utils import (
+    ClickableLabel, CardGroup, NonScrollComboBox,
+    apply_to_widgets, set_widget_ranges, add_card_shadow
+)
 # -------- worker --------
 from StringArtConverter.UI.workers import ConvertWorker, BatchSearchWorker
 
@@ -66,6 +68,8 @@ class MainWindow(QMainWindow):
         self.current_pins: Optional[np.ndarray] = None
         self.current_work_size: int = 0
 
+        self.is_startup: bool = True
+
         self._thread: Optional[QThread] = None
         self._worker: Optional[ConvertWorker] = None
 
@@ -110,7 +114,7 @@ class MainWindow(QMainWindow):
         self.btn_convert.clicked.connect(self.start_conversion)
         self.btn_convert.setEnabled(False)
 
-        # params search button
+        # params search button - currently disabled
         self.btn_batch = QPushButton("Batch Preset Search…")
         self.btn_batch.clicked.connect(self.start_batch_search)
         self.btn_batch.setEnabled(False)
@@ -120,7 +124,7 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         run_row.addWidget(self.btn_convert, 0)
-        run_row.addWidget(self.btn_batch, 0)
+        #run_row.addWidget(self.btn_batch, 0)
         run_row.addWidget(self.progress, 1)
         right_layout.addLayout(run_row)
         right_layout.addStretch(1)
@@ -131,7 +135,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.group_preview)
 
         # presets
-        self.combo_preset = QComboBox()
+        self.combo_preset = NonScrollComboBox()
         self.combo_preset.setObjectName("comboPreset")
         row = QHBoxLayout()
         row.addWidget(QLabel("Presets:"))
@@ -176,12 +180,12 @@ class MainWindow(QMainWindow):
     def _group_source(self) -> QGroupBox:
         help_html = (
             "<b>Preprocessing</b><br>"
-            "<u>Work size</u>: resizing the image (higher = enables more lines, but gets slower).<br>"
+            "<u>Work size</u>: 'Canvas Size' (higher = enables more lines, but gets slower).<br>"
             "<u>CLAHE</u>: local contrast equalization (can add noise).<br>"
             "<u>Contrast stretch</u>: remap dark/bright percentiles ('compress' grayscale values).<br>"
             "<u>Blend edges</u>: mix edges into the target (higher = more focused on contours).<br>"
-            "<u>Face detection</u>: give more weight to faces (solver focuses more on them).<br>"
-            "<u>Darken background (rembg)</u>: background detection mask to dim background;"
+            "<u>Face detection</u>: give more weight to faces.<br>"
+            "<u>Darken background (rembg)</u>: darken background by the given dim factor;"
         )
         card = CardGroup("Image preprocessing options", help_html, self)
         f = card.form
@@ -227,9 +231,10 @@ class MainWindow(QMainWindow):
         help_html = (
             "<b>General options</b><br>"
             "<u>Pins</u>: number of nails around the circle.<br>"
-            "<u>Max lines</u>: number of threads to compute.<br>"
+            "<u>Number of Lines</u>: number of threads to compute.<br>"
             "<u>Min distance</u>: minimum direct neighbors skipped to avoid short lines.<br>"
-            "<u>Line weight</u>: how much one thread influences residual (higher = faster convergence, but less detail gain later on).<br>"
+            "<u>Line weight</u>: how much one thread influences the residual "
+            "(higher = faster convergence, but less detail later on).<br>"
             "<u>Cooldown last-N</u>: avoid revisiting the last N pins to reduce streaks."
         )
         card = CardGroup("General options", help_html, self)
@@ -242,7 +247,7 @@ class MainWindow(QMainWindow):
         self.sld_lastn = IntSlider(0, 256, 20)
 
         f.addRow("Pins:", self.sld_pins)
-        f.addRow("Max lines:", self.sld_steps)
+        f.addRow("Number of Lines:", self.sld_steps)
         f.addRow("Min distance:", self.sld_min_dist)
         f.addRow("Line weight:", self.sld_line_weight)
         f.addRow("Cooldown last-N:", self.sld_lastn)
@@ -251,9 +256,11 @@ class MainWindow(QMainWindow):
     def _group_preview(self) -> QGroupBox:
         help_html = (
             "<b>Rendering Preview</b><br>"
-            "<u>Darken per line</u>: how much each line darkens the preview.<br>"
-            "<u>Gamma</u>: display gamma.<br>"
-            "<u>Line thickness</u>: 'string' width."
+            "<u>Darken per string</u>: how much each line darkens the preview - relates to opacity/color of the chosen string (gray, black...).<br>"
+            "<u>Gamma</u>: gamma of the displayed render.<br>"
+            "<u>Line thickness</u>: 'string' width.<br>"
+            "<u>Save Preview</u>: saves the generated preview image<br>"
+            "<u>Save Path</u>: saves the generated sequence of pins as a csv file."
         )
         card = CardGroup("Preview options", help_html, self)
         f = card.form
@@ -286,10 +293,8 @@ class MainWindow(QMainWindow):
             "<u>Prev</u>: jumps one step back.<br>"
             "<u>Next</u>: jumps one step further.<br>"
             "<u>Switch Preview</u>: Switches the preview between the completed image and the current pin-by-pin step.<br>"
-            "<u>Jump to step</u>: jump to the specified step (with ENTER or 'Go').<br>"
-            "<u>Load Path</u>: loads the path from the specified CSV file.<br>"
-            "<u>Save Session</u>: save the current pin-by-pin building session, so you can continue later.<br>"
-            "<u>Load Session</u>: loads a guided pin-by-pin session from a specified file."
+            "<u>Jump to step</u>: jump to the specified step (with ENTER or 'Jump').<br>"
+            "<u>Load Path</u>: loads the path from the specified CSV file."
         )
         card = CardGroup("Guided Build", help_html)
         f = card.form
@@ -341,13 +346,14 @@ class MainWindow(QMainWindow):
         row_io = QHBoxLayout()
         self.btn_load_path = QPushButton("Load Path…")
         self.btn_save_session = QPushButton("Save Session…")
-        self.btn_load_session = QPushButton("Load Session…")
+        self.btn_load_session = QPushButton("Load Last Session…")
         self.btn_load_path.clicked.connect(self._guided_load_path)
         self.btn_save_session.clicked.connect(self._guided_save_session)
         self.btn_load_session.clicked.connect(self._guided_load_session)
         row_io.addWidget(self.btn_load_path)
-        row_io.addWidget(self.btn_save_session)
-        row_io.addWidget(self.btn_load_session)
+        #row_io.addWidget(self.btn_save_session)
+        #row_io.addWidget(self.btn_load_session)
+
         f.addRow(row_io)
 
         return card
@@ -418,6 +424,7 @@ class MainWindow(QMainWindow):
             # preprocessing
             pp_clahe=self.chk_clahe.isChecked(),
             pp_contrast=self.chk_contrast.isChecked(),
+            pp_face_mask=self.chk_face_fg_detection.isChecked(),
             pp_c_low=float(self.sld_low.value()),
             pp_c_high=float(self.sld_high.value()),
             pp_edges=self.chk_edges.isChecked(),
@@ -567,6 +574,7 @@ class MainWindow(QMainWindow):
             # preprocessing
             "pp_clahe":          self.chk_clahe,
             "pp_contrast":       self.chk_contrast,
+            "pp_face_mask":      self.chk_face_fg_detection,
             "pp_c_low":          self.sld_low,
             "pp_c_high":         self.sld_high,
             "pp_edges":          self.chk_edges,
@@ -588,14 +596,14 @@ class MainWindow(QMainWindow):
         # apply ranges to widgets
         set_widget_ranges(self._cfg.get("ranges", {}), self.wmap)
 
-        # apply default
-        default = clamp_to_ranges(self._cfg.get("default", {}), self._cfg.get("ranges", {}))
-        apply_to_widgets(default, self.wmap)
+        # apply default (balanced portrait)
+        balanced_portrait = clamp_to_ranges(self._cfg.get("default", {}), self._cfg.get("ranges", {}))
+        apply_to_widgets(balanced_portrait, self.wmap)
 
         # fill preset combo
         self.combo_preset.blockSignals(True)
         self.combo_preset.clear()
-        self.combo_preset.addItem("Default")
+        self.combo_preset.addItem("Portrait: Balanced")
         for p in self._cfg.get("presets", []):
             self.combo_preset.addItem(p.get("name", "Untitled"))
         self.combo_preset.blockSignals(False)
@@ -731,7 +739,7 @@ class MainWindow(QMainWindow):
         for w in (self.lbl_step, self.lbl_next, self.lbl_switch,
                 self.spin_step, self.btn_jump_to,
                 self.btn_prev, self.btn_next, self.btn_switch,
-                self.btn_load_path, self.btn_save_session, self.btn_load_session):
+                self.btn_save_session, self.btn_load_session):
             w.setEnabled(on)
 
     def _setup_guide_ui(self):
@@ -873,14 +881,34 @@ class MainWindow(QMainWindow):
                     except ValueError:
                         continue
 
-            if not segs or self.current_pins is None:
+            if not segs or num_pins is None:
                 warn(self, "Load path", "No segments or no current pins available.")
                 return
 
             self.guided_path = segs
             self.guided_pins = num_pins
             self.guided_work_size = self.current_work_size if self.current_work_size else self.guided_work_size
-            self.guided_index = 0
+            self.guided_index = -1
+            self.is_render_guided = False
+
+            # setup rest, if done directly after startup
+            if (self.is_startup):
+                self.current_path = segs
+                self.current_pins = num_pins
+                self.current_work_size = self.current_work_size if self.current_work_size else self.guided_work_size
+
+                params = self.gather_params()
+                preview_u8 = render_path(
+                    work_size=self.current_work_size,
+                    pins=self.current_pins,
+                    path=self.current_path,
+                    alpha_per_line=params["render_alpha"],
+                    gamma=params["render_gamma"],
+                    thickness=params["line_thickness"],
+                )
+                rgb = np.dstack([preview_u8]*3)
+                self.image_label.setPixmap(to_qpixmap_from_rgb(rgb, self.image_label.size()))
+
             self._setup_guide_ui()
             self._render_guided()
             info(self, "Loaded", f"Loaded {len(segs)} segments from:\n{path}")

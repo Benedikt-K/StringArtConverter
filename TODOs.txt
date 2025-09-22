@@ -1,17 +1,7 @@
-UI:
-    delete batch convert button again
-
 other:
     finish gitignore
     proper documentation
 
-    make load path/session available from start
+    fix startup load path
 
     consistent function naming
-    switch preview button initializing
-
-    save session and only load last -> save one number
-
-    default settings - make box non-scrollable
-
-    face detection function availability

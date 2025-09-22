@@ -3,7 +3,7 @@ import numpy as np
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QCursor, QColor
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, 
+    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QFormLayout, QSpinBox, QComboBox,
     QDoubleSpinBox, QHBoxLayout, QToolButton, QToolTip, QGraphicsDropShadowEffect
 )
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
@@ -15,6 +15,10 @@ class ClickableLabel(QLabel):
         if e.button() == Qt.LeftButton:
             self.clicked.emit()
         super().mouseReleaseEvent(e)
+
+class NonScrollComboBox(QComboBox):
+    def wheelEvent(self, event):
+        event.ignore()
 
 class HelpBadge(QToolButton):
     """
