@@ -5,6 +5,7 @@ import math
 import cv2
 import numpy as np
 import os
+import csv
 
 # -------- UI ----------
 from PySide6.QtCore import Qt, QThread, QSize
@@ -178,10 +179,9 @@ class MainWindow(QMainWindow):
             "<u>Work size</u>: resizing the image (higher = enables more lines, but gets slower).<br>"
             "<u>CLAHE</u>: local contrast equalization (can add noise).<br>"
             "<u>Contrast stretch</u>: remap dark/bright percentiles ('compress' grayscale values).<br>"
-            "<u>Blend edges</u>: mix edges into the target (higher = more contour bias).<br>"
-            "<u>Darken background (rembg)</u>: AI background detection mask to dim background;"
-            "<u>Feather</u>: softens the mask edges.<br>"
-            "<u>Erode</u>: shriks the mask."
+            "<u>Blend edges</u>: mix edges into the target (higher = more focused on contours).<br>"
+            "<u>Face detection</u>: give more weight to faces (solver focuses more on them).<br>"
+            "<u>Darken background (rembg)</u>: background detection mask to dim background;"
         )
         card = CardGroup("Image preprocessing options", help_html, self)
         f = card.form
@@ -208,15 +208,15 @@ class MainWindow(QMainWindow):
         f.addRow(self.chk_edges)
         f.addRow("Edge weight:", self.sld_edge_weight)
 
-        # Background dim
+        # Masking options
         self.chk_rembg = QCheckBox("Darken background")
         self.sld_rembg_dim = FloatSlider(0.0, 1.0, 0.6, step=0.05)
         self.sld_rembg_feather = IntSlider(0, 64, 8, suffix=" px", tick=4)
         self.sld_rembg_erode = IntSlider(0, 8, 1, suffix=" px")
+        self.chk_face_fg_detection = QCheckBox("Face detection")
+        f.addRow(self.chk_face_fg_detection)
         f.addRow(self.chk_rembg)
         f.addRow("Dim factor:", self.sld_rembg_dim)
-        f.addRow("Feather:", self.sld_rembg_feather)
-        f.addRow("Erode:", self.sld_rembg_erode)
 
         # Check ranges of sliders
         self._wire_percentile_guards()
@@ -472,7 +472,7 @@ class MainWindow(QMainWindow):
         self.guided_work_size = self.current_work_size
         self.guided_index = -1
         self._setup_guide_ui()
-        self._render_guide()
+        self._render_guided()
 
         self.btn_convert.setEnabled(True)
         self.btn_save_preview.setEnabled(bool(path))
@@ -528,10 +528,19 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Save coordinates", "path.csv", "CSV (*.csv)")
         if not path:
             return
-        import csv
         try:
             with open(path, "w", newline="", encoding="utf-8") as f:
-                w = csv.writer(f); w.writerow(["from_pin", "to_pin"]); w.writerows(self.current_path)
+                w = csv.writer(f)
+                
+                # metadata header
+                num_pins = len(self.current_pins) if self.current_pins is not None else 0
+                w.writerow([f"# pins={num_pins}"])
+
+                # data header
+                w.writerow(["from_pin", "to_pin"])
+                
+                # data (path)
+                w.writerows(self.current_path)
             info(self, "Saved", f"Coordinates saved to:\n{path}")
         except Exception as e:
             error(self, "Save failed", str(e))
@@ -752,7 +761,7 @@ class MainWindow(QMainWindow):
         v = max(0, min(N, v))
         if v != self.guided_index:
             self.guided_index = v
-            self._render_guide()
+            self._render_guided()
         else:
             self._update_step_label()
 
@@ -762,7 +771,7 @@ class MainWindow(QMainWindow):
             self.spin_step.blockSignals(True)
             self.spin_step.setValue(self.guided_index)
             self.spin_step.blockSignals(False)
-            self._render_guide()
+            self._render_guided()
 
     def _step_next(self):
         if self.guided_index < len(self.guided_path):
@@ -770,7 +779,7 @@ class MainWindow(QMainWindow):
             self.spin_step.blockSignals(True)
             self.spin_step.setValue(self.guided_index)
             self.spin_step.blockSignals(False)
-            self._render_guide()
+            self._render_guided()
 
     def _switch_preview(self):
         """
@@ -790,7 +799,7 @@ class MainWindow(QMainWindow):
             self.lbl_switch.setText('<span style="font-weight:bold;">Finished</span> | Pin-by-Pin')
         else:
             self.is_render_guided = True
-            self._render_guide()
+            self._render_guided()
             self.lbl_switch.setText('Finished | <span style="font-weight:bold;">Pin-by-Pin</span>')
 
     def _guided_save_session(self):
@@ -827,7 +836,7 @@ class MainWindow(QMainWindow):
             self.guided_pins = np.asarray(data["pins"], dtype=np.int32)
             self.guided_path = [tuple(x) for x in data["path"]]
             self._setup_guide_ui()
-            self._render_guide()
+            self._render_guided()
             info(self, "Loaded", f"Session loaded:\n{path}")
         except Exception as e:
             error(self, "Load failed", str(e))
@@ -836,38 +845,49 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getOpenFileName(self, "Load path CSV", "", "CSV (*.csv *.txt)")
         if not path:
             return
-        import csv
         try:
             segs = []
+            num_pins = None
             with open(path, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
-                # skip header if present
-                first = next(reader)
-                try:
-                    a, b = int(first[0]), int(first[1])
-                    segs.append((a, b))
-                except Exception:
-                    pass  # header line; ignore
+
+                first = next(reader, None)
+                if first:
+                    if first[0].startswith("# pins="):
+                        try:
+                            num_pins = int(first[0].split("=")[1])
+                        except ValueError:
+                            pass
+                        header = next(reader, None)
+                else:
+                    try:
+                        a, b = int(first[0]), int(first[1])
+                        segs.append((a, b))
+                    except Exception:
+                        pass  # not valid row
                 for row in reader:
                     if len(row) < 2:
                         continue
-                    segs.append((int(row[0]), int(row[1])))
+                    try:
+                        segs.append((int(row[0]), int(row[1])))
+                    except ValueError:
+                        continue
 
             if not segs or self.current_pins is None:
                 warn(self, "Load path", "No segments or no current pins available.")
                 return
 
             self.guided_path = segs
-            self.guided_pins = self.current_pins if self.current_pins is not None else self.guided_pins
+            self.guided_pins = num_pins
             self.guided_work_size = self.current_work_size if self.current_work_size else self.guided_work_size
             self.guided_index = 0
             self._setup_guide_ui()
-            self._render_guide()
+            self._render_guided()
             info(self, "Loaded", f"Loaded {len(segs)} segments from:\n{path}")
         except Exception as e:
             error(self, "Load failed", str(e))
 
-    def _render_guide(self):
+    def _render_guided(self):
         if self.guided_pins is None or self.guided_work_size <= 0:
             return
         N = len(self.guided_path)

@@ -4,13 +4,14 @@ UI:
 other:
     finish gitignore
     proper documentation
-    add pin numbers ob preview circle?
 
-    main window refactor, move methods out
-
-    make load path/session available rom start
+    make load path/session available from start
 
     consistent function naming
+    switch preview button initializing
 
+    save session and only load last -> save one number
 
-    toggle between birhgten and darken backgound --> maybe add make more uniform?
+    default settings - make box non-scrollable
+
+    face detection function availability
