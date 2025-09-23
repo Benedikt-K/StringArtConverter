@@ -26,6 +26,7 @@ from StringArtConverter.UI.workers import ConvertWorker, BatchSearchWorker
 # -------- solver  --------
 from StringArtConverter.utils import load_presets_json, clamp_to_ranges, Segment
 from StringArtConverter.previewer import render_path
+from StringArtConverter.solver import pin_positions_circle
 
 # -------- APP STYLES --------
 from StringArtConverter.UI.app_styles import APP_STYLES
@@ -541,7 +542,8 @@ class MainWindow(QMainWindow):
                 
                 # metadata header
                 num_pins = len(self.current_pins) if self.current_pins is not None else 0
-                w.writerow([f"# pins={num_pins}"])
+                work_size = self.current_work_size if self.current_work_size is not None else 0
+                w.writerow([f"# pins={num_pins}", f"work size={work_size}"])
 
                 # data header
                 w.writerow(["from_pin", "to_pin"])
@@ -856,17 +858,23 @@ class MainWindow(QMainWindow):
         try:
             segs = []
             num_pins = None
+            work_size = None
             with open(path, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
 
-                first = next(reader, None)
+                first = next(reader)
                 if first:
                     if first[0].startswith("# pins="):
                         try:
                             num_pins = int(first[0].split("=")[1])
                         except ValueError:
                             pass
-                        header = next(reader, None)
+                    if first[1].startswith('work size='):
+                        try:
+                            work_size = int(first[1].split("=")[1])
+                        except ValueError:
+                            pass
+                    next(reader)
                 else:
                     try:
                         a, b = int(first[0]), int(first[1])
@@ -881,36 +889,44 @@ class MainWindow(QMainWindow):
                     except ValueError:
                         continue
 
-            if not segs or num_pins is None:
-                warn(self, "Load path", "No segments or no current pins available.")
+            if not segs:
+                warn(self, "Load path", "No segments available.")
                 return
 
+            pins = pin_positions_circle(work_size, num_pins)
+
             self.guided_path = segs
-            self.guided_pins = num_pins
-            self.guided_work_size = self.current_work_size if self.current_work_size else self.guided_work_size
+            self.guided_pins = pins
+            self.guided_work_size = work_size
             self.guided_index = -1
             self.is_render_guided = False
 
             # setup rest, if done directly after startup
             if (self.is_startup):
                 self.current_path = segs
-                self.current_pins = num_pins
-                self.current_work_size = self.current_work_size if self.current_work_size else self.guided_work_size
+                self.current_pins = pins
+                self.current_work_size = work_size
 
                 params = self.gather_params()
                 preview_u8 = render_path(
                     work_size=self.current_work_size,
                     pins=self.current_pins,
                     path=self.current_path,
-                    alpha_per_line=params["render_alpha"],
-                    gamma=params["render_gamma"],
-                    thickness=params["line_thickness"],
+                    alpha_per_line=self.sld_alpha.value(),
+                    gamma=self.sld_gamma.value(),
+                    thickness=self.sld_thick.value(),
                 )
-                rgb = np.dstack([preview_u8]*3)
+                rgb = np.dstack([preview_u8] * 3)
                 self.image_label.setPixmap(to_qpixmap_from_rgb(rgb, self.image_label.size()))
+                self._update_step_label()
 
             self._setup_guide_ui()
+
+            # render guided and change switch button
+            self.is_render_guided = True
             self._render_guided()
+            self.lbl_switch.setText('Finished | <span style="font-weight:bold;">Pin-by-Pin</span>')
+
             info(self, "Loaded", f"Loaded {len(segs)} segments from:\n{path}")
         except Exception as e:
             error(self, "Load failed", str(e))

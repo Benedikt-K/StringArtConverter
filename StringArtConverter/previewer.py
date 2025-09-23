@@ -23,7 +23,6 @@ def render_path(work_size,
     pins_xy = np.asarray(pins, dtype=np.float32)
     pins_xy = np.round(pins_xy).astype(np.int32)
 
-    # test other colors
     count = 0
     for a, b in path:
         x0, y0 = int(pins_xy[a, 0]), int(pins_xy[a, 1])

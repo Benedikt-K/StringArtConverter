@@ -4,4 +4,6 @@ other:
 
     fix startup load path
 
+    fortschrittsbalken - erste prozente
+
     consistent function naming

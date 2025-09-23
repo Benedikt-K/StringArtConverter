@@ -52,11 +52,13 @@ class ConvertWorker(QObject):
             importance = build_importance_map(gray, worksize=self.params["work_size"])
 
             # debug outputs
+            '''
             imp_vis = visualize_importance_map(importance)
             cv2.imwrite("importance_debug.png", imp_vis)
 
             target_vis = visualize_target(gray)
             cv2.imwrite("target_debug.png", target_vis)
+            '''
 
             path, err, target, pins = solve_string_art(
                 source_brightness_u8=src_u8,
