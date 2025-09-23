@@ -160,12 +160,13 @@ QPushButton#btn_convert:disabled{
 QProgressBar {
     background: #111318;
     border: 1px solid #2b2f36;
-    border-radius: 8px;
+    border-radius: 3px;
     text-align: center;
 }
 QProgressBar::chunk {
     background: #1f6feb;
-    border-radius: 8px;
+    border-radius: 3px;
+    margin: 1px;
 }
 
 /* ---------------- checkboxes ------------------------ */

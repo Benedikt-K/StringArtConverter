@@ -278,7 +278,7 @@ class MainWindow(QMainWindow):
         self.btn_save_preview = QPushButton("Save Preview…")
         self.btn_save_preview.clicked.connect(self.save_preview)
         self.btn_save_preview.setEnabled(False)
-        self.btn_export_path = QPushButton("Export Path…")
+        self.btn_export_path = QPushButton("Save Path…")
         self.btn_export_path.clicked.connect(self.export_path)
         self.btn_export_path.setEnabled(False)
         row.addWidget(self.btn_save_preview)

@@ -121,10 +121,6 @@ def solve_string_art(
     current_pin = 0
     last_pins = [-1] * last_n
 
-    print("gray:", gray.shape)
-    print("importance_map:", importance_map.shape if importance_map is not None else None)
-    print("line_cache size:", max(idx.max() for idx in line_cache.values()))
-
     for step in range(max_lines):
         if progress_cb:
             progress_cb(int(100 * step / max(1, max_lines - 1)))
