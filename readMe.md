@@ -80,7 +80,7 @@ StringArtConverter/
 │  ├─ previewer.py          # Renderer
 │  ├─ solver.py             # String-Art-Generating algorithm
 │  └─ utils.py
-├─ cli.py                   # alternate option to get result via CLI
+├─ cli.py                   # alternate option to get result via CLI (outdated)
 ├─ requirements.txt
 └─ README.md
 ```
