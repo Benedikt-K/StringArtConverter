@@ -28,9 +28,17 @@ Load a photo, preprocess and generate a sequence of nail-to-nail lines.
 ## Pin-by-pin
 
 You can save/load your generated path and from that start a guided session. 
+<br><br>
 This session shows, which pin connection is the one you need to do next and gives a preview with the current step marked in blue.
 
-![UI while in pin-to-pin mode](https://github.com/Benedikt-K/StringArtConverter/tree/main/assets/pin-by-pin.png "screenshot")
+<table>
+  <tr>
+    <td><img src="assets/pin-by-pin.png" alt="screenshot while in pin-by-pin" width="1000"></td>
+  </tr>
+  <tr>
+    <td align="center"><em>UI while in pin-to-pin mode</em></td>
+  </tr>
+</table>
 
 # Quick start
 

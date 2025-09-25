@@ -772,6 +772,7 @@ class MainWindow(QMainWindow):
         if v != self.guided_index:
             self.guided_index = v
             self._render_guided()
+            self.lbl_switch.setText('Finished | <span style="font-weight:bold;">Pin-by-Pin</span>')
         else:
             self._update_step_label()
 
