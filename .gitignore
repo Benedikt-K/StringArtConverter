@@ -15,10 +15,6 @@ ENV/
 env.bak/
 venv.bak/
 
-# Jupyter / IPython
-.ipynb_checkpoints
-*.ipynb
-
 # Distribution / packaging
 .Python
 build/
@@ -96,13 +92,8 @@ $RECYCLE.BIN/
 *.avi
 *.mkv
 *.mov
-# Avoid committing big test images
-/data/
-output/
-results/
 # output
-path.txt
-session.json
+path.csv
 
 # ---- IDE ----
 .idea/
@@ -114,3 +105,8 @@ face batch/best params.txt
 face batch/params.txt
 obama batch/best params.txt
 obama batch/params.txt
+
+# ----- build -----
+*.spec
+build/
+dist/

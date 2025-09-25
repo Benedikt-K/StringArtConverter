@@ -1,8 +1,6 @@
 # StringArtConverter
 
-**-- CURRENTLY STILL IN DEVELOPMENT --**
-
-Turn any image into **string art**:
+Turn any image into **string art**:<br>
 Load a photo, preprocess and generate a sequence of nail-to-nail lines.
 
 <table>
@@ -21,11 +19,18 @@ Load a photo, preprocess and generate a sequence of nail-to-nail lines.
 
 # Features
 
-- **Desktop UI**
-- **Preprocessing pipeline**
-- **Greedy Solver**
-- **Renderer**
-- **Export**
+- **Desktop UI (PySide6)**
+- **Preprocessing pipeline (background/face recognition)**
+- **Line Generation (greedy solver)**
+- **Preview Renderer**
+- **Guided pin-by-pin build of the image**
+
+## Pin-by-pin
+
+You can save/load your generated path and from that start a guided session. 
+This session shows, which pin connection is the one you need to do next and gives a preview with the current step marked in blue.
+
+![UI while in pin-to-pin mode](https://github.com/Benedikt-K/StringArtConverter/tree/main/assets/pin-by-pin.png "screenshot")
 
 # Quick start
 
@@ -40,41 +45,34 @@ cd StringArtConverter
 conda create -n StringArtConverter python=3.10 -y
 conda activate StringArtConverter
 pip install -r requirements.txt
-pip install rembg onnxruntime
 ```
 
-## Option A (recommended):
+## Start the app with::
 
-start with:
 ```
 python main.py
 ```
 
-then use User Interface for parameter selection.
-
-## Option B:
-
-use Command Line Interface with parameters:
-
-
---specify later--
+Then use User Interface for parameter selection, conversion and all of the rest.
 
 # Structure
 
 ```
 StringArtConverter/
-├─ main.py
+├─ main.py                  # file to start app from
 ├─ StringArtConverter/
 │  ├─ UI/
-│  │  ├─ app_styles.py
-│  │  ├─ main_window.py
-│  │  ├─ sliders.py
+│  │  ├─ app_styles.py      # CSS Sytle sheet
+│  │  ├─ main_window.py     # UI code for main Window
+│  │  ├─ sliders.py         # Custom slider class
 │  │  ├─ ui_utils.py
-│  │  └─ settings.json
-│  ├─ preprocessing.py
-│  ├─ previewer.py
-│  ├─ solver.py
+│  │  ├─ workers.py         # Workers so app remains responsive
+│  │  └─ settings.json      # Setting presets
+│  ├─ preprocessing.py      # Image preprocessing for better results
+│  ├─ previewer.py          # Renderer
+│  ├─ solver.py             # String-Art-Generating algorithm
 │  └─ utils.py
+├─ cli.py                   # alternate option to get result via CLI
 ├─ requirements.txt
 └─ README.md
 ```
@@ -84,4 +82,4 @@ Distributed under the MIT License.
 
 # Topics
 
-`python`, `pyside6`, `image-processing`, `string-art`, `computer-vision`, `onnx`
+`python`, `pyside6`, `image-processing`, `string-art`, `string-art-generator`, `computer-vision`

@@ -1,5 +1,0 @@
-other:
-    finish gitignore
-    proper documentation
-
-    consistent function naming

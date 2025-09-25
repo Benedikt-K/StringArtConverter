@@ -1,13 +1,11 @@
 # Core
-numpy>=1.23
-opencv-python>=4.8
+numpy>=1.26.4
+opencv-python>=4.12.0.88
 
-# Qt
-PySide6>=6.5
+# User Interface
+PySide6>=6.9.1
 
-# background removal
-rembg>=2.0.56
+# background/face recognition
+rembg>=2.0.67
 onnxruntime>=1.15
-
-# CSV export
-pandas>=2.0
+mediapipe>=0.10.21
