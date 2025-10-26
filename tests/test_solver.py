@@ -195,3 +195,5 @@ def test_solver_robust_to_noise():
     noisy_img = np.clip(img - noise, 0, 255)
     path, _, _, _ = solve_string_art(noisy_img, n_pins=12, max_lines=5, work_size=16)
     assert len(path) >= 0
+
+# endregion
