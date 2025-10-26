@@ -5,7 +5,14 @@ Segment = Tuple[int, int]
 
 def save_path_txt(path: List[Segment], out_txt: str) -> None:
     """
-    Save path to file
+    Save a string art path to a text file.
+
+    Each line of the output file contains a pair of integers representing
+    a segment between two pins.
+
+    Args:
+        path (List[Tuple[int, int]]): List of (start_pin, end_pin) pairs.
+        out_txt (str): Output file path for saving the path data.
     """
     with open(out_txt, "w", encoding="utf-8") as f:
         for a, b in path:
@@ -13,7 +20,17 @@ def save_path_txt(path: List[Segment], out_txt: str) -> None:
 
 def load_presets_json(path: str) -> dict:
     """
-    Load preset values, ranges, presets from json file
+    Load the preset configuration values from a JSON file.
+
+    Args:
+        path (str): Path to the JSON file.
+
+    Returns:
+        dict: Dictionary with keys "ranges", "defaults", and "presets".
+
+    Raises:
+        json.JSONDecodeError: If the file is not valid JSON.
+        FileNotFoundError: If the file does not exist.
     """
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -24,7 +41,15 @@ def load_presets_json(path: str) -> dict:
 
 def clamp_to_ranges(params: dict, ranges: dict) -> dict:
     """
-    Ensure values are in range
+    Clamp numeric parameters to defined minimum/maximum ranges.
+
+    Args:
+        params (dict): Dictionary of parameter names and their current values.
+        ranges (dict): Dictionary of parameter names and "min" and "max".
+            If a limit is missing, the value is not clamped in that direction.
+
+    Returns:
+        dict: A new dictionary with clamped parameter values.
     """
     out = dict(params)
     for k, r in ranges.items():

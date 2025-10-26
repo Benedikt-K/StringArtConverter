@@ -1,3 +1,12 @@
+"""
+preprocessing.py
+
+Image preprocessing utilities for the String Art Converter.
+
+This module provides a set of helper functions for preparing images
+before they are processed by the string art solver. 
+"""
+
 from __future__ import annotations
 import cv2
 import numpy as np
@@ -11,7 +20,14 @@ except Exception:
 
 def resize_square(img_bgr: np.ndarray, size: int) -> np.ndarray:
     """
-    Center crop image then resize to the desired size
+    Center crop an image, then resize it to the desired size.
+
+    Args:
+        img_gbr (np.ndarray): Input image in BGR format
+        size (int): Target side length in pixels
+
+    Returns:
+        np.darray: Square image of shape (size, size, 3)
     """
     h, w = img_bgr.shape[:2]
     side = min(h, w)
@@ -25,16 +41,43 @@ def resize_square(img_bgr: np.ndarray, size: int) -> np.ndarray:
 
 def to_gray_u8(img_bgr: np.ndarray) -> np.ndarray:
     """
-    Convert to grayscale
+    Convert a BGR image to grayscale (uint8).
+
+    Args:
+        img_bgr (np.ndarray): Input color image in BGR format.
+
+    Returns:
+        np.ndarray: Grayscale image
     """
     return cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
 def apply_clahe(gray_u8: np.ndarray, clip: float = 2.0, tiles: int = 8) -> np.ndarray:
+    """
+    Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to image.
+
+    Args:
+        gray_u8 (np.ndarray): Grayscale input image.
+        clip (float, optional): CLAHE clip limit. Defaults to 2.0.
+        tiles (int, optional): Tile grid size (tiles x tiles). Defaults to 8.
+
+    Returns:
+        np.ndarray: Contrast-enhanced grayscale image.
+    """
     clahe = cv2.createCLAHE(clipLimit=float(clip), tileGridSize=(int(tiles), int(tiles)))
     return clahe.apply(gray_u8)
 
 def contrast_stretch(gray_u8: np.ndarray, p_low: float = 2.0, p_high: float = 98.0) -> np.ndarray:
-    # percentile-based min/max, stretch to [0,255]
+    """
+    Perform percentile-based contrast stretching.
+
+    Args:
+        gray_u8 (np.ndarray): Grayscale input image.
+        p_low (float, optional): Low percentile cutoff. Defaults to 2.0.
+        p_high (float, optional): High percentile cutoff. Defaults to 98.0.
+
+    Returns:
+        np.ndarray: Contrast-stretched image scaled to [0, 255].
+    """
     lo = np.percentile(gray_u8, np.clip(p_low, 0, 50))
     hi = np.percentile(gray_u8, np.clip(p_high, 50, 100))
     if hi <= lo + 1e-6:
@@ -43,8 +86,20 @@ def contrast_stretch(gray_u8: np.ndarray, p_low: float = 2.0, p_high: float = 98
     return (g * 255.0 + 0.5).astype(np.uint8)
 
 def canny_edges(gray_u8: np.ndarray, low: int = -1, high: int = -1, auto_sigma: float = 0.33) -> np.ndarray:
+    """
+    Detect edges using the Canny algorithm with optional thresholds.
+
+    Args:
+        gray_u8 (np.ndarray): Grayscale input image.
+        low (int, optional): Lower Canny threshold. If negative, computed automatically. Defaults to -1.
+        high (int, optional): Upper Canny threshold. If negative, computed automatically. Defaults to -1.
+        auto_sigma (float, optional): Sigma for auto threshold calculation. Defaults to 0.33.
+
+    Returns:
+        np.ndarray: Binary edge map (uint8) with values in [0,255].
+    """
     if low < 0 or high < 0:
-        # auto thresholds from median
+        # get thresholds from median
         v = np.median(gray_u8)
         low = int(max(0, (1.0 - auto_sigma) * v))
         high = int(min(255, (1.0 + auto_sigma) * v))
@@ -58,11 +113,19 @@ def rembg_dim_background(
     erode_px: int = 0
 ) -> np.ndarray:
     """
-    Use rembg to get a foreground mask, darken ONLY the background by dim_factor.
-    Feather_px softens the mask edges, erode_px shriks the mask
-    Returns a BGR image with a darker bg, same size as input.
+    Darken the image background using a segmentation mask from rembg.
 
-    If rembg is unavailable, returns the original image unchanged.
+    Uses the rembg library to estimate a foreground mask and darkens
+    the background region by a specified dimming factor.
+
+    Args:
+        img_bgr (np.ndarray): Input image in BGR format.
+        dim_factor (float, optional): Amount to darken the background (0.0-1.0). Defaults to 0.5.
+        feather_px (int, optional): Gaussian blur radius for mask feathering. Defaults to 6.
+        erode_px (int, optional): Pixels to erode the foreground mask. Defaults to 0.
+
+    Returns:
+        np.ndarray: Input image with background dimmed. If rembg is unavailable, returns the original.
     """
     if not _HAS_REMBG:
         print("rembg not found")
@@ -97,9 +160,14 @@ def rembg_dim_background(
 
 def apply_gamma(gray_u8: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     """
-    Shifts midtones of the image
+    Apply gamma correction to shift midtones.
 
-    gamma < 1.0 brightens midtones, gamma > 1.0 darkens midtones
+    Args:
+        gray_u8 (np.ndarray): Grayscale input image.
+        gamma (float, optional): Gamma value (<1.0 brightens, >1.0 darkens). Defaults to 1.0.
+
+    Returns:
+        np.ndarray: Gamma-corrected image.
     """
     if abs(gamma - 1.0) < 1e-6:
         return gray_u8
@@ -109,7 +177,14 @@ def apply_gamma(gray_u8: np.ndarray, gamma: float = 1.0) -> np.ndarray:
 
 def brightness_clip(gray_u8: np.ndarray, clip_high: float = 98.0) -> np.ndarray:
     """
-    Clip brightest highlights off
+    Clip the brightest highlights based on percentile threshold.
+
+    Args:
+        gray_u8 (np.ndarray): Grayscale input image.
+        clip_high (float, optional): Upper percentile cutoff. Defaults to 98.0.
+
+    Returns:
+        np.ndarray: Input image with clipped highlights.
     """
     hi = np.percentile(gray_u8, clip_high)
     if hi <= 1:
@@ -138,13 +213,32 @@ def build_target_for_solver(
     pp_clip_high: float,
 ) -> np.ndarray:
     """
-    Builds the target using specified preprocessing steps and settings
+    Build a preprocessed target image.
 
-    Internally we form a 'target darkness' in [0..1], then convert:
-      SourceImage_u8 = 255 * (1 - target_darkness)
-    so dark/edgey areas become low brightness, high error (255 - src).
+    Applies resizing, optional background dimming, CLAHE, contrast stretching,
+    gamma correction, highlight clipping, and optional edge detection.
 
-    Returns uint8 brightness image (H,W) where 0=black, 255=white.
+    Args:
+        img_bgr (np.ndarray): Input image in BGR format.
+        work_size (int): Final image size for the solver.
+        use_clahe (bool): Whether to apply CLAHE.
+        use_contrast (bool): Whether to apply contrast stretching.
+        p_low (float): Low percentile for contrast stretching.
+        p_high (float): High percentile for contrast stretching.
+        use_edges (bool): Whether to blend Canny edges into darkness map.
+        edge_weight (float): Weight of edge influence.
+        edge_low (int): Lower Canny threshold.
+        edge_high (int): Upper Canny threshold.
+        edge_auto_sigma (float): Sigma for automatic threshold estimation.
+        use_rembg (bool): Whether to dim background using rembg.
+        rembg_dim (float): Dimming factor for rembg background.
+        rembg_feather (int): Mask feathering in pixels.
+        rembg_erode (int): Mask erosion in pixels.
+        pp_gamma (float): Gamma correction value.
+        pp_clip_high (float): Brightness clipping percentile.
+
+    Returns:
+        np.ndarray: Preprocessed target brightness image
     """
     img = resize_square(img_bgr, work_size)
 
@@ -184,13 +278,25 @@ def build_target_for_solver(
 
 def build_importance_map(gray: np.ndarray, worksize: int = 512) -> np.ndarray:
     """
-    Computes importance map:
-    - Background = 0.2
-    - Foreground = 0.5
-    - Face = 1.0
+    Compute an importance map for solver weighting of Faces/Foreground/Backgound.
+
+    Combines rembg background detection and MediaPipe face detection to prioritize
+    foreground and facial regions in the solver optimization.
+
+    Args:
+        gray (np.ndarray): Grayscale source image.
+        worksize (int, optional): Output map size. Defaults to 512.
+
+    Returns:
+        np.ndarray: Float32 importance map (H, W) in range [0.1, 1.0].
     """
+    # initialize weights:
+    weight_fg = 0.8
+    weight_bg = 0.2
+    weight_face = 1.5
+
     H, W = gray.shape
-    imp = np.ones((H, W), dtype=np.float32) * 0.8 # -------Foreground = 0.8
+    imp = np.ones((H, W), dtype=np.float32) * weight_fg
 
     try:
         from rembg import remove
@@ -199,11 +305,11 @@ def build_importance_map(gray: np.ndarray, worksize: int = 512) -> np.ndarray:
         if out.ndim == 3 and out.shape[2] == 4:
             alpha = out[:, :, 3].astype(np.float32) / 255.0
             bg_mask = 1.0 - alpha
-            imp[bg_mask > 0.5] = 0.2    # -----Background = 0.2
+            imp[bg_mask > 0.5] = weight_bg
     except Exception:
         pass
 
-    # --- 2) face detection with MediaPipe FaceMesh ---
+    # face detection using MediaPipe FaceMesh
     mp_face_mesh = mp.solutions.face_mesh
     with mp_face_mesh.FaceMesh(
         static_image_mode=True,
@@ -226,18 +332,15 @@ def build_importance_map(gray: np.ndarray, worksize: int = 512) -> np.ndarray:
 
                 pts_arr = np.array(pts, dtype=np.int32)
                 if pts_arr.shape[0] >= 3:
-                    # convext hull is robust and gives a closed polygon for the face
                     hull = cv2.convexHull(pts_arr)
-                    # fill hull with weight 1.0 (face)
-                    # cv2.fillConvexPoly works well here
-                    cv2.fillConvexPoly(imp, hull, 1.5) #------ Face = 1.5
+                    cv2.fillConvexPoly(imp, hull, weight_face)
 
-    # --- 3) resize to solver worksize and smooth slightly ---
+    # resize to solver worksize and smooth slightly
     imp_resized = cv2.resize(imp, (worksize, worksize), interpolation=cv2.INTER_LINEAR)
-    # slight gaussian blur to avoid very hard edges (tunable)
+    # slight gaussian blur to avoid very hard edges
     imp_resized = cv2.GaussianBlur(imp_resized, (0, 0), sigmaX=2.0)
 
-    # clamp to sensible bounds [0.1 .. 1.0] (ensure background at least 0.1)
+    # clamp to sensible bounds [0.1, 1.0], ensure background at least 0.1
     imp_resized = np.clip(imp_resized, 0.1, 1.0).astype(np.float32)
 
     return imp_resized

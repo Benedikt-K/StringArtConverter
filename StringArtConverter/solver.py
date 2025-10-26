@@ -8,7 +8,16 @@ from StringArtConverter.utils import Segment
 
 def pin_positions_circle(size: int, n_pins: int, margin: int = 1) -> np.ndarray:
     """
-    Get positions of pins
+    Compute evenly spaced pin positions arranged on a circle.
+
+    Args:
+        size (int): Image or workspace size in pixels (square assumed).
+        n_pins (int): Number of pins to distribute around the circle.
+        margin (int, optional): Distance in pixels between the pins and the image border.
+            Defaults to 1.
+
+    Returns:
+        np.ndarray: Array of shape (n_pins, 2) containing integer (x, y) coordinates.
     """
     cx, cy = size / 2, size / 2
     r = size / 2 - margin
@@ -19,7 +28,21 @@ def pin_positions_circle(size: int, n_pins: int, margin: int = 1) -> np.ndarray:
 
 def precalc_lines(pins: np.ndarray, n_pins: int, size: int, min_distance: int):
     """
-    Precompute pixel indices for each line (both directions).
+    Precompute pixel indices for each valid pin-to-pin line segment.
+
+    For each pair of pins farther apart than `min_distance`, this function
+    precomputes which pixels the connecting line covers. These indices are used 
+    for faster error evaluation.
+
+    Args:
+        pins (np.ndarray): Array of pin coordinates with shape (n_pins, 2).
+        n_pins (int): Total number of pins.
+        size (int): Working image size in pixels (square assumed).
+        min_distance (int): Minimum pin spacing along the ring (how many pins 
+            need to be in between to consider a valid connection).
+
+    Returns:
+        dict: Mapping from (pin_a, pin_b) to 1D NumPy array of pixel indices.
     """
     H = W = size
     line_cache = {}
@@ -52,33 +75,35 @@ def solve_string_art(
     progress_cb: Optional[callable] = None,
 ) -> Tuple[List[Segment], np.ndarray, np.ndarray, np.ndarray]:
     """
-    Computes sequence of pin-to-pin connections based on error minimization
-    Parameters:
-        source_brightness_u8: np.ndarray
-            Target on which error is based on
-        max_lines: int
-            How many connections are calculated
-        min_distance: int
-            How close on the ring next pin can be to current one
-        line_weight: float
-            How much each new line contributes
-        last_n: int
-            Forbids the revist of a pin for a number of lines
-        work_size: int
-            On what resolution the error is calculated
-        progress_cb: Optional[callable]
-            Optional progress tracking parameter
-    Returns:
-        List[Segment]
-            A List with all Segments of the calculated path
-        np.ndarray
-            Error at the end of computation
-        np.ndarray
-            Target used
-        np.ndarray
-            Pin positions used
-    """
+    Computes sequence of pin-to-pin connections based on error minimization, that
+    approximates the input image.
 
+    Implements a greedy solver that iteratively selects the line between pins, that
+    most reduces the error between the target brightness and the simulated coverage.
+
+    Args:
+        source_brightness_u8 (np.ndarray): Grayscale target image or brightness map.
+        n_pins (int): Number of pins distributed around the circular frame.
+        max_lines (int): Maximum number of thread segments to draw.
+        min_distance (int, optional): Minimum distance between connected pins along the circle.
+            Defaults to 30.
+        line_weight (float, optional): Fiber density increment per line segment.
+            Larger values make each line darker. Defaults to 8.0.
+        last_n (int, optional): Number of recent pins to avoid revisiting.
+            Prevents short loops. Defaults to 20.
+        work_size (int, optional): Working image resolution used for computation. Defaults to 512.
+        importance_map (Optional[np.ndarray], optional): Optional per-pixel weight map that
+            prioritizes certain regions during optimization. Must match work_size if provided.
+        progress_cb (Optional[callable], optional): Callback function receiving an integer
+            progress percentage (0-100). Defaults to None.
+
+    Returns:
+        Tuple[List[Segment], np.ndarray, np.ndarray, np.ndarray]:
+            - List[Segment]: Sequence of (start_pin, end_pin) pairs representing the path.
+            - np.ndarray: Final weighted error map (H, W).
+            - np.ndarray: Target brightness image used in optimization.
+            - np.ndarray: Array of pin coordinates.
+    """
     # Ensure shape = (H,W)
     if source_brightness_u8.ndim == 1:
         gray = source_brightness_u8.reshape(work_size, work_size).astype(np.float32)

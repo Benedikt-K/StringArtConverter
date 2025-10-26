@@ -2,16 +2,34 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QHBoxLayout, QLabel, QSlider
 
 class NoWheelSlider(QSlider):
+    """
+    QSlider subclass that ignores mouse wheel events to prevent accidental value changes.
+    """
     def wheelEvent(self, e):
         e.ignore()
 
 class IntSlider(QWidget):
     """
-    Int slider that has a step size and min/max
+    Integer slider with step size, min/max range, and a display label.
+
+    Attributes:
+        valueChanged (Signal): Emitted when the slider value changes.
     """
     valueChanged = Signal(int)
 
     def __init__(self, minimum: int, maximum: int, value: int, step: int = 1, *, suffix: str = "", tick: int | None = None, parent=None):
+        """
+        Initialize an integer slider.
+
+        Args:
+            minimum (int): Minimum slider value.
+            maximum (int): Maximum slider value.
+            value (int): Initial slider value.
+            step (int, optional): Step size. Defaults to 1.
+            suffix (str, optional): Text suffix for display label. Defaults to "".
+            tick (int | None, optional): Tick interval. Defaults to None.
+            parent (QWidget, optional): Parent widget. Defaults to None.
+        """
         super().__init__(parent)
         self._suffix = suffix
         self._slider = NoWheelSlider(Qt.Horizontal)
@@ -33,30 +51,76 @@ class IntSlider(QWidget):
         self._slider.valueChanged.connect(self._on_change)
 
     def setRange(self, minimum: int, maximum: int):
+        """
+        Set minimum and maximum values of the slider.
+
+        Args:
+            minimum (int): Minimum value.
+            maximum (int): Maximum value.
+        """
         self._slider.setRange(int(minimum), int(maximum))
         self.setValue(self.value())
 
     def setStep(self, step: int):
+        """
+        Set step size of the slider.
+
+        Args:
+            step (int): Step size.
+        """
         self._slider.setPageStep(max(1, int(step)))
 
     def _on_change(self, v: int):
+        """
+        Internal callback for slider value change: applies step size, 
+        updates label, emits valueChanged signal.
+
+        Args:
+            v (int): Raw slider value.
+        """
         v = self.apply_step_size(v)
         self._label.setText(f"{v}{self._suffix}")
         self.valueChanged.emit(v)
 
     def value(self) -> int:
+        """
+        Get the current slider value.
+
+        Returns:
+            int: Current value.
+        """
         return int(self._slider.value())
 
     def setValue(self, v: int):
+        """
+        Set the slider to a specific value.
+
+        Args:
+            v (int): Value to set.
+        """
         v = self.apply_step_size(v)
         self._slider.setValue(int(v))
 
     def setEnabled(self, e: bool):
+        """
+        Enable or disable the slider and its label.
+
+        Args:
+            e (bool): True to enable, False to disable.
+        """
         self._slider.setEnabled(e)
         self._label.setEnabled(e)
 
     def apply_step_size(self, v: int) -> int:
-        # round to nearest step value
+        """
+        Round a value to the nearest valid step within the slider's range.
+
+        Args:
+            v (int): Value to round.
+
+        Returns:
+            int: Rounded value.
+        """
         minimum = self._slider.minimum()
         maximum = self._slider.maximum()
         step = self._slider.pageStep()
@@ -69,13 +133,28 @@ class IntSlider(QWidget):
 
 class FloatSlider(QWidget):
     """
-    Float slider with fixed precision using an internal integer scale.
-    Example: FloatSlider(0.0, 1.0, 0.35, step=0.01) -> shows 2 decimals
+    Float slider using an internal integer scale for precision control.
+
+    Attributes:
+        valueChanged (Signal): Emitted when the slider value changes.
     """
     valueChanged = Signal(float)
 
     def __init__(self, minimum: float, maximum: float, value: float, *, step: float = 0.01, decimals: int | None = None,
                  suffix: str = "", tick: float | None = None, parent=None):
+        """
+        Initialize a float slider.
+
+        Args:
+            minimum (float): Minimum slider value.
+            maximum (float): Maximum slider value.
+            value (float): Initial slider value.
+            step (float, optional): Step size. Defaults to 0.01.
+            decimals (int | None, optional): Number of decimal places. Defaults to None.
+            suffix (str, optional): Text suffix for display label. Defaults to "".
+            tick (float | None, optional): Tick interval. Defaults to None.
+            parent (QWidget, optional): Parent widget. Defaults to None.
+        """
         super().__init__(parent)
         self._decimals = decimals if decimals is not None else max(0, len(str(step).split(".")[-1]))
         self._suffix = suffix
@@ -99,43 +178,105 @@ class FloatSlider(QWidget):
         self._slider.valueChanged.connect(self._on_change)
 
     def set_step(self, step: float):
+        """
+        Set step size for the slider.
+
+        Args:
+            step (float): Step size.
+        """
         self._scale = int(round(1.0 / max(1e-9, float(step))))
         if hasattr(self, "_min") and hasattr(self, "_max"):
             self._slider.setRange(0, int(round((self._max - self._min) * self._scale)))
             self.setValue(self.value())
 
     def set_range(self, minimum: float, maximum: float):
+        """
+        Set minimum and maximum slider values.
+
+        Args:
+            minimum (float): Minimum value.
+            maximum (float): Maximum value.
+        """
         self._min = float(minimum)
         self._max = float(maximum)
         self._slider.setRange(0, int(round((self._max - self._min) * self._scale)))
         self.setValue(self.value())
 
     def setRange(self, minimum: float, maximum: float):
+        """
+        Set minimum and maximum slider values.
+
+        Args:
+            minimum (float): Minimum value.
+            maximum (float): Maximum value.
+        """
         self.set_range(minimum, maximum)
 
     def _fmt(self, v: float) -> str:
+        """
+        Format a float value with specified decimals and suffix for display.
+
+        Args:
+            v (float): Value to format.
+
+        Returns:
+            str: Formatted string.
+        """
         return f"{v:.{self._decimals}f}{self._suffix}"
 
     def _on_change(self, raw: int):
+        """
+        Internal callback for slider value change:
+        converts raw int to float, applies step, updates label, emits valueChanged.
+
+        Args:
+            raw (int): Raw slider integer value.
+        """
         v = self._min + raw / self._scale
         v = self.apply_step_size(v)
         self._label.setText(self._fmt(v))
         self.valueChanged.emit(v)
 
     def value(self) -> float:
+        """
+        Get the current slider value.
+
+        Returns:
+            float: Current value.
+        """
         raw = self._slider.value()
         return self._min + raw / self._scale
 
     def setValue(self, v: float):
+        """
+        Set the slider to a specific float value.
+
+        Args:
+            v (float): Value to set.
+        """
         v = self.apply_step_size(v)
         self._slider.setValue(int(round((v - self._min) * self._scale)))
 
     def setEnabled(self, e: bool):
+        """
+        Enable or disable the slider and its label.
+
+        Args:
+            e (bool): True to enable, False to disable.
+        """
         self._slider.setEnabled(e)
         self._label.setEnabled(e)
 
     def apply_step_size(self, v: float) -> float:
-        """Round value to nearest step within range"""
+        """
+        Round a value to the nearest valid step within the slider's range.
+
+        Args:
+            v (float): Value to round.
+
+        Returns:
+            float: Rounded value.
+        """
         step = self._step
         v = round((v - self._min) / step) * step + self._min
         v = max(self._min, min(self._max, v))

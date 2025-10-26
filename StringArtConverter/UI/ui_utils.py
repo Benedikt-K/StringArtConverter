@@ -9,22 +9,36 @@ from PySide6.QtWidgets import (
 from StringArtConverter.UI.sliders import IntSlider, FloatSlider
 
 class ClickableLabel(QLabel):
+    """
+    QLabel subclass that emits a signal when clicked.
+    """
     clicked = Signal()
 
     def mouseReleaseEvent(self, e):
+        """
+        Emit 'clicked' signal when the label is left-clicked.
+        """
         if e.button() == Qt.LeftButton:
             self.clicked.emit()
         super().mouseReleaseEvent(e)
 
 class NonScrollComboBox(QComboBox):
+    """
+    QComboBox that ignores scroll-wheel events to prevent accidental changes.
+    """
     def wheelEvent(self, event):
         event.ignore()
 
 class HelpBadge(QToolButton):
     """
-    Help Box that displays tooltip on hover
+    Small circular help button that shows a tooltip on click or hover.
     """
     def __init__(self, tooltip_html: str, parent=None):
+        """
+        Args:
+            tooltip_html (str): HTML content displayed as tooltip.
+            parent (QWidget, optional): Parent widget.
+        """
         super().__init__(parent)
         self.setText("?")
         self.setCursor(Qt.PointingHandCursor)
@@ -35,13 +49,22 @@ class HelpBadge(QToolButton):
         self.clicked.connect(self._show_tooltip_now)
 
     def _show_tooltip_now(self):
+        """
+        Show the tooltip at the current cursor position.
+        """
         QToolTip.showText(QCursor.pos(), self.toolTip(), self)
 
 class CardGroup(QWidget):
     """
-    Groupbox card with a header row (title + helpBadge) and body area.
+    Card-style widget containing a titled header and form area.
     """
     def __init__(self, title: str, help_html: str, parent=None):
+        """
+        Args:
+            title (str): Title text displayed in the card header.
+            help_html (str): HTML help text displayed in the tooltip badge.
+            parent (QWidget, optional): Parent widget.
+        """
         super().__init__(parent)
         self.setObjectName("CardGroup")
         self.setAttribute(Qt.WA_StyledBackground, True)
@@ -68,7 +91,10 @@ class CardGroup(QWidget):
 
 def add_card_shadow(w):
     """
-    Adds a shadow to chosen widget
+    Apply a soft shadow effect to a widget.
+
+    Args:
+        w (QWidget): Target widget to which the shadow effect is applied.
     """
     fx = QGraphicsDropShadowEffect(w)
     fx.setBlurRadius(18)
@@ -77,6 +103,13 @@ def add_card_shadow(w):
     w.setGraphicsEffect(fx)
 
 def apply_to_widgets(params: dict, wmap: dict):
+    """
+    Set widget values based on a parameter dictionary.
+
+    Args:
+        params (dict): Mapping of parameter names to values.
+        wmap (dict): Mapping of widget names to their corresponding instances.
+    """
     for key, val in params.items():
         widget = wmap.get(key)
         if widget is None:
@@ -87,6 +120,16 @@ def apply_to_widgets(params: dict, wmap: dict):
             widget.setValue(val)
 
 def set_widget_ranges(ranges: dict, wmap: dict):
+    """
+    Configure min/max/step ranges input widgets.
+
+    Supports QSpinBox, QDoubleSpinBox, IntSlider, and FloatSlider.
+
+    Args:
+        ranges (dict): Mapping of widget names to range specifications. Each value 
+            should be a dict with optional keys: 'min', 'max', and 'step'.
+        wmap (dict): Mapping of widget names to widget instances.
+    """
     for name, spec in ranges.items():
         w = wmap.get(name)
         if w is None:
@@ -126,6 +169,15 @@ def set_widget_ranges(ranges: dict, wmap: dict):
             continue
 
 def collect_from_widgets(wmap: dict) -> dict:
+    """
+    Read and collect values from a group of widgets into a dictionary.
+
+    Args:
+        wmap (dict): Mapping of parameter names to widget instances.
+
+    Returns:
+        dict: Dictionary mapping widget names to their current values.
+    """
     out = {}
     for key, widget in wmap.items():
         if hasattr(widget, "isChecked"):

@@ -1,15 +1,97 @@
 from __future__ import annotations
 import argparse
 import cv2, numpy as np
-from typing import Tuple, List
 
 from StringArtConverter.preprocessing import build_target_for_solver
 from StringArtConverter.previewer import render_path
 from StringArtConverter.solver import solve_string_art
 from StringArtConverter.utils import save_path_txt
 
-# -------------------- CLI --------------------
 def main():
+    """
+    Run the command-line interface for the String Art Converter.
+
+    This function parses command-line arguments, applies preprocessing
+    to the input image, runs the string-art solver, and optionally renders
+    a preview image.
+
+    The typical workflow is:
+        1. Load the input image from disk.
+        2. Preprocess it according to the given options (CLAHE, contrast, edges, etc.).
+        3. Run the string-art solver to compute an optimal path between nails.
+        4. Save the path to a text file.
+        5. Optionally, render a preview image showing the generated thread pattern.
+
+    Command-line arguments
+    ----------------------
+    Required:
+        --input : str
+            Path to the input image file.
+
+    Solver parameters:
+        --pins : int
+            Number of nails/pins around the frame.
+        --steps : int
+            Maximum number of lines to draw.
+        --work_size : int
+            Image size used internally for computation.
+        --min_distance : int
+            Minimum distance (in pins) between consecutive connections.
+        --line_weight : float
+            Darkness contribution per line (for simulation).
+        --last_n : int
+            Number of recent lines ignored to avoid overlap.
+        --preview : str
+            Optional output filename for the rendered preview image.
+        --out : str
+            Path to save the computed path text file.
+
+    Rendering parameters:
+        --render_alpha : float
+            Per-line darkness contribution in the preview (smaller = lighter).
+        --render_gamma : float
+            Gamma correction applied to the rendered preview.
+        --line_thickness : int
+            Thickness of lines in the rendered preview image.
+
+    Preprocessing parameters:
+        --pp_clahe : bool
+            Apply CLAHE before other steps.
+        --pp_contrast : bool
+            Enable percentile-based contrast stretching.
+        --pp_c_low / --pp_c_high : float
+            Percentiles for low/high contrast adjustment.
+        --pp_rembg : bool
+            Use rembg to separate foreground and dim the background.
+        --pp_rembg_dim : float
+            Factor for dimming background intensity (0-1).
+        --pp_rembg_feather : int
+            Feathering (Gaussian blur) for mask edges.
+        --pp_rembg_erode : int
+            Pixel erosion amount to reduce halo artifacts.
+        --pp_gamma : float
+            Gamma correction before inversion (<1 = brighten, >1 = darken).
+        --pp_clip_high : float
+            Percentile for brightness clipping (e.g., 95 = clip top 5%).
+        --pp_edges : bool
+            Blend Canny edges into the target image.
+        --pp_edge_weight : float
+            Weight for blending edges (0-1).
+        --pp_edge_low / --pp_edge_high : int
+            Canny edge thresholds; -1 = auto.
+        --pp_edge_auto_sigma : float
+            Sigma factor used for automatic Canny thresholds.
+
+    Raises:
+        SystemExit: If the input image cannot be loaded.
+
+    Side Effects:
+        - Prints progress to stdout.
+        - Writes output files (path text file, optional preview image).
+
+    Example:
+        $ python CLI.py --input portrait.jpg --pins 300 --steps 3000 --preview output.png
+    """
     ap = argparse.ArgumentParser(description="String-art converter")
     # --- solver ---
     ap.add_argument("--input", required=True)

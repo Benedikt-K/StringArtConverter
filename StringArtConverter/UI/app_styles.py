@@ -1,3 +1,18 @@
+"""
+Application stylesheet (QSS) for String Art Converter.
+
+Contains styles for:
+- Main windows, widgets, and backgrounds
+- Scroll areas and scrollbars
+- Group boxes and cards
+- Labels, sliders, buttons, and progress bars
+- Checkboxes, tooltips, combo boxes, spin boxes, and menus
+
+Usage:
+    from app_styles import APP_STYLES
+    app.setStyleSheet(APP_STYLES)
+"""
+
 APP_STYLES = """
 /* ----------------- Global base ------------------ */
 QMainWindow {

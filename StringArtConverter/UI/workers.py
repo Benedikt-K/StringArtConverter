@@ -13,16 +13,38 @@ from StringArtConverter.previewer import visualize_importance_map, visualize_tar
 
 # region ----------- convert worker -----------
 class ConvertWorker(QObject):
+    """
+    Worker class that performs the string art conversion process in a background thread.
+
+    Signals:
+        progress (int): Emitted with progress percentage (0-100).
+        finished (list, np.ndarray, np.ndarray, np.ndarray): Emitted when the conversion
+            is complete, returning: the calculated path, error map, target, and pin positions.
+        errored (str): Emitted with an error message if an exception occurs.
+    """
     progress = Signal(int)
     finished = Signal(list, np.ndarray, np.ndarray, np.ndarray)  # path, error, target, pins
     errored = Signal(str)
 
     def __init__(self, img_bgr: np.ndarray, params: dict):
+        """
+        Args:
+            img_bgr (np.ndarray): Input image in BGR format.
+            params (dict): Dictionary of solver and preprocessing parameters.
+        """
         super().__init__()
         self.img_bgr = img_bgr
         self.params = params
 
     def run(self):
+        """
+        Run the string art conversion process.
+
+        Emits:
+            - 'progress(int)': periodically with progress percentage.
+            - 'finished(list, np.ndarray, np.ndarray, np.ndarray)': upon success.
+            - 'errored(str)': upon exception.
+        """
         try:
             src_u8 = build_target_for_solver(
                 img_bgr=self.img_bgr,
@@ -52,13 +74,13 @@ class ConvertWorker(QObject):
             importance = build_importance_map(gray, worksize=self.params["work_size"])
 
             # debug outputs
-            '''
+            """
             imp_vis = visualize_importance_map(importance)
             cv2.imwrite("importance_debug.png", imp_vis)
 
             target_vis = visualize_target(gray)
             cv2.imwrite("target_debug.png", target_vis)
-            '''
+            """
 
             path, err, target, pins = solve_string_art(
                 source_brightness_u8=src_u8,
@@ -78,11 +100,29 @@ class ConvertWorker(QObject):
 
 # region ----------- param search worker -----------
 class BatchSearchWorker(QObject):
+    """
+    Worker that performs grid-based parameter search for batch evaluation.
+
+    Note: this is computationaly intensive, especially when using a lot of possible
+    parameter combinations, as the problem is solved for all of them.
+
+    Signals:
+        progress (int): Emitted with progress percentage (0-100).
+        finished (str): Emitted when batch search completes successfully.
+        errored (str): Emitted with an error message if an exception occurs.
+    """
     progress = Signal(int)
     finished = Signal(str)
     errored = Signal(str)
 
     def __init__(self, img_bgr: np.ndarray, base_params: dict, grid: dict, out_dir: str):
+        """
+        Args:
+            img_bgr (np.ndarray): Input image in BGR format.
+            base_params (dict): Base configuration parameters.
+            grid (dict): Dictionary mapping parameter names to lists of possible values.
+            out_dir (str): Directory where result images and logs are saved.
+        """
         super().__init__()
         self.img_bgr = img_bgr
         self.base = base_params
@@ -90,6 +130,13 @@ class BatchSearchWorker(QObject):
         self.out_dir = out_dir
 
     def _variants(self):
+        """
+        Generate all parameter combinations from the grid.
+
+        Yields:
+            dict: A parameter dictionary combining base parameters with one combination
+                of grid values.
+        """
         keys = list(self.grid.keys())
         vals = [self.grid[k] for k in keys]
         for combo in product(*vals):
@@ -99,6 +146,20 @@ class BatchSearchWorker(QObject):
             yield p
 
     def run(self):
+        """
+        Execute the batch grid search and save all results.
+
+        For each parameter combination, this worker:
+        - Preprocesses the input image.
+        - Solves the string art pattern.
+        - Renders a preview image.
+        - Saves results and metrics to disk.
+
+        Emits:
+            - 'progress(int)': periodically with completion percentage.
+            - 'finished(str)': with output directory path when done.
+            - 'errored(str)': with error message on exception.
+        """
         try:
             os.makedirs(self.out_dir, exist_ok=True)
             lines = []

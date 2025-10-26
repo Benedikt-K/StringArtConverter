@@ -1,3 +1,20 @@
+"""
+main_window.py
+
+This module defines the MainWindow class for the String Art Converter application,
+a PySide6-based GUI tool for generating string art representations from images.
+
+Classes:
+    MainWindow(QMainWindow): Main application window with UI layout, signal handling, 
+                             and conversion workflow management.
+
+Dependencies:
+- PySide6
+- OpenCV (cv2)
+- NumPy
+- StringArtConverter modules: UI widgets, workers, previewer, solver, utils, app_styles
+"""
+
 # region ----------- imports -----------
 from __future__ import annotations
 from typing import List, Optional
@@ -34,6 +51,16 @@ from StringArtConverter.UI.app_styles import APP_STYLES
 
 # region ----------- helpers -----------
 def to_qpixmap_from_rgb(rgb: np.ndarray, fit_size: Optional[QSize] = None) -> QPixmap:
+    """
+    Convert an RGB numpy array to a QPixmap for display in Qt.
+
+    Args:
+        rgb (np.ndarray): Input image array in RGB format.
+        fit_size (Optional[QSize]): If provided, scales pixmap to this size preserving aspect ratio.
+
+    Returns:
+        QPixmap: The resulting Qt pixmap.
+    """
     if rgb.ndim == 2:
         rgb = np.stack([rgb]*3, axis=-1)
     h, w, ch = rgb.shape
@@ -44,21 +71,60 @@ def to_qpixmap_from_rgb(rgb: np.ndarray, fit_size: Optional[QSize] = None) -> QP
     return pm
 
 def bgr_to_rgb_img(bgr: np.ndarray) -> np.ndarray:
+    """
+    Convert an BGR image to RGB.
+
+    Args:
+        bgr (np.ndarray): Input image in BGR format.
+
+    Returns:
+        np.ndarray: Image in RGB format.
+    """
     return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 
 def info(self, title, text):
+    """
+    Show an information message box.
+
+    Args:
+        title (str): Message box title.
+        text (str): Message content.
+    """
     QMessageBox.information(self, title, text)
 
 def warn(self, title, text):
+    """
+    Show a warning message box.
+
+    Args:
+        title (str): Message box title.
+        text (str): Message content.
+    """
     QMessageBox.warning(self, title, text)
 
 def error(self, title, text):
+    """
+    Show an error message box.
+
+    Args:
+        title (str): Message box title.
+        text (str): Message content.
+    """
     QMessageBox.critical(self, title, text)
 # endregion
 
 # region ----------- Main window -----------
 class MainWindow(QMainWindow):
+    """
+    Main application window for the String Art Converter.
+
+    Handles UI construction, image loading, conversion worker threads,
+    preview rendering, guided pin-by-pin interaction, and batch search.
+    """
     def __init__(self):
+        """
+        Initialize the main window, build UI, menus, and load presets.
+        """
         super().__init__()
         self.setWindowTitle("String Art Converter")
         self.resize(1500, 900)
@@ -87,6 +153,10 @@ class MainWindow(QMainWindow):
 
     # ----------- UI layout -----------
     def _build_ui(self):
+        """
+        Construct the main UI layout: left image preview and right control panel.
+        Sets up sliders, buttons, and guided build section.
+        """
         root = QWidget()
         main = QHBoxLayout(root)
         main.setContentsMargins(14, 12, 14, 12)
@@ -179,6 +249,12 @@ class MainWindow(QMainWindow):
         self._set_guided_enabled(False)
 
     def _group_source(self) -> QGroupBox:
+        """
+        Build the "Preprocessing" card group with sliders and checkboxes for image processing.
+
+        Returns:
+            QGroupBox: The constructed preprocessing options card.
+        """
         help_html = (
             "<b>Preprocessing</b><br>"
             "<u>Work size</u>: 'Canvas Size' (higher = enables more lines, but gets slower).<br>"
@@ -229,6 +305,12 @@ class MainWindow(QMainWindow):
         return card
 
     def _group_solver(self) -> QGroupBox:
+        """
+        Build the "General options" card group for solver settings.
+
+        Returns:
+            QGroupBox: The constructed solver options card.
+        """
         help_html = (
             "<b>General options</b><br>"
             "<u>Pins</u>: number of nails around the circle.<br>"
@@ -255,6 +337,12 @@ class MainWindow(QMainWindow):
         return card
 
     def _group_preview(self) -> QGroupBox:
+        """
+        Build the "Preview options" card group.
+
+        Returns:
+            QGroupBox: The constructed preview options card.
+        """
         help_html = (
             "<b>Rendering Preview</b><br>"
             "<u>Darken per string</u>: how much each line darkens the preview - relates to opacity/color of the chosen string (gray, black...).<br>"
@@ -287,6 +375,12 @@ class MainWindow(QMainWindow):
         return card
     
     def _group_guided(self) -> QGroupBox:
+        """
+        Build the "Guided Build" card group for pin-by-pin visualization and navigation.
+
+        Returns:
+            QGroupBox: The constructed guided build card.
+        """
         help_html = (
             "<b>Pin-by-pin build</b><br>"
             "<u>Step</u>: displays what the current step is.<br>"
@@ -361,6 +455,9 @@ class MainWindow(QMainWindow):
 
     # ----------- Menu -----------
     def _build_menu(self):
+        """
+        Create the File menu with "Open Image" and "Quit" actions.
+        """
         m = self.menuBar().addMenu("&File")
         act_open = QAction("Open Image…", self)
         act_open.triggered.connect(self.open_image)
@@ -372,6 +469,9 @@ class MainWindow(QMainWindow):
         m.addAction(act_quit)
     
     def _wire_percentile_guards(self):
+        """
+        Ensure that low/high contrast percentile sliders cannot cross each other.
+        """
         def clamp_low(v):
             if v > self.sld_high.value():
                 self.sld_low.setValue(self.sld_high.value())
@@ -384,21 +484,36 @@ class MainWindow(QMainWindow):
 
     # ----------- Drag & Drop -----------
     def dragEnterEvent(self, e):
+        """
+        Accept drag event if it contains URLs (files).
+        """
         if e.mimeData().hasUrls():
             e.acceptProposedAction()
 
     def dropEvent(self, e):
+        """
+        Load the first image from a drag-and-drop operation.
+        """
         for url in e.mimeData().urls():
             self.load_image(url.toLocalFile())
             break
 
     # ----------- Load File -----------
     def open_image(self):
+        """
+        Open a file dialog to select and load an image.
+        """
         path, _ = QFileDialog.getOpenFileName(self, "Open image", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if path:
             self.load_image(path)
 
     def load_image(self, path: str):
+        """
+        Load an image from file and display it in the preview.
+
+        Args:
+            path (str): Path to the image file.
+        """
         bgr = cv2.imread(path, cv2.IMREAD_COLOR)
         if bgr is None:
             warn(self, "Open image", "Could not read the image.")
@@ -415,6 +530,12 @@ class MainWindow(QMainWindow):
 
     # ----------- Run Converter -----------
     def gather_params(self) -> dict:
+        """
+        Gather current values from all sliders and checkboxes as conversion parameters.
+
+        Returns:
+            dict: Dictionary of all solver, preprocessing, and preview parameters.
+        """
         return dict(
             work_size=self.sld_work.value(),
             pins=self.sld_pins.value(),
@@ -444,6 +565,10 @@ class MainWindow(QMainWindow):
         )
 
     def start_conversion(self):
+        """
+        Start a new conversion using ConvertWorker in a separate QThread.
+        Disables UI buttons while running.
+        """
         if self.img_bgr is None:
             info(self, "No image", "Load an image first.")
             return
@@ -470,6 +595,16 @@ class MainWindow(QMainWindow):
         self._thread.start()
 
     def on_finished(self, path: List[Segment], err: np.ndarray, target: np.ndarray, pins: np.ndarray):
+        """
+        Callback for when the conversion finishes successfully.
+        Updates preview, guided UI, and enables buttons.
+
+        Args:
+            path (List[Segment]): Generated segment path.
+            err (np.ndarray): Residual error array (unused here).
+            target (np.ndarray): Preprocessed target image.
+            pins (np.ndarray): Array of pin positions.
+        """
         self.current_path = path
         self.current_pins = pins
         self.current_work_size = target.shape[0] if target.ndim == 2 else int(math.sqrt(target.size))
@@ -506,11 +641,20 @@ class MainWindow(QMainWindow):
         info(self, "Done", f"Generated {len(path)} segments.")
 
     def on_errored(self, msg: str):
+        """
+        Callback for when the conversion worker reports an error.
+
+        Args:
+            msg (str): Error message.
+        """
         self.btn_convert.setEnabled(True)
         error(self, "Error during conversion", msg)
 
     # ----------- Save Methods -----------
     def save_preview(self):
+        """
+        Save the rendered preview image to a PNG file.
+        """
         if not self.current_path or self.current_pins is None:
             info(self, "No preview", "Run a conversion first.")
             return
@@ -530,6 +674,9 @@ class MainWindow(QMainWindow):
         info(self, "Saved", f"Preview saved to:\n{path}")
 
     def export_path(self):
+        """
+        Save the generated pin path to a CSV file.
+        """
         if not self.current_path:
             info(self, "Nothing to export", "Run a conversion first.")
             return
@@ -557,7 +704,7 @@ class MainWindow(QMainWindow):
     # ----------- Settings Import -----------
     def _build_wmap(self):
         """
-        Map parameter keys to widgets.
+        Map parameter keys to their corresponding widgets for preset application.
         """
         self.wmap = {
             # solver
@@ -589,7 +736,8 @@ class MainWindow(QMainWindow):
 
     def _load_presets_json(self):
         """
-        Read settings.json, apply settings to widgets (ranges, default, and preset list).
+        Load presets from 'settings.json', apply default values to widgets, 
+        and populate the preset combo box.
         """
         # load file
         cfg_path = os.path.join(os.path.dirname(__file__), "settings.json")
@@ -614,6 +762,12 @@ class MainWindow(QMainWindow):
         self._on_preset_changed(0)
 
     def _on_preset_changed(self, idx: int):
+        """
+        Apply selected preset parameters to widgets.
+
+        Args:
+            idx (int): Index of the preset in the combo box.
+        """
         if not hasattr(self, "_cfg"):
             return
         ranges = self._cfg.get("ranges", {})
@@ -628,6 +782,9 @@ class MainWindow(QMainWindow):
 
     # --------------- Batch prams get -----------------------
     def start_batch_search(self):
+        """
+        Start a batch search of parameters using BatchSearchWorker in a QThread.
+        """
         if self.img_bgr is None:
             info(self, "No image", "Load an image first.")
             return
@@ -640,7 +797,8 @@ class MainWindow(QMainWindow):
 
         # This is the "grid search" for the batch search here, as you already are in the code you can use this to generate
         # multiple images/paths to find the params that fit you image the best. feel free to modify any of the ranges below.
-        # It searches through all possible combinations so dont search through all of them at once :D
+        # It searches through all possible combinations so dont search through all of them at once, if you don't want to
+        # wait very very long :D
         grid = {
             # preprocessing toggles/weights
             "pp_edges":        [True],
@@ -675,9 +833,18 @@ class MainWindow(QMainWindow):
 
         def _prune_grid(base: dict, grid: dict) -> dict:
             """
-            Return a copy of grid with dependent possibilities collapsed when their toggle is False.
+            Collapse dependent grid parameters when their toggle is False.
 
-            Example: If pp_edges includes False, collapse pp_edge_weight for the False branch.
+            Args:
+                base (dict): Base parameter values.
+                grid (dict): Dictionary of parameter lists to explore.
+
+            Returns:
+                dict: Updated grid with impossible combinations removed.
+            
+            Example:
+                If 'pp_edges' is False, only a single value for 'pp_edge_weight'
+                is used to avoid unnecessary combinations.
             """
             g = {k: list(v) for k, v in grid.items()}
 
@@ -694,6 +861,15 @@ class MainWindow(QMainWindow):
         grid = _prune_grid(base, grid)
 
         def _count_runs(g):
+            """
+            Compute the total number of runs in the grid search.
+
+            Args:
+                g (dict): Grid dictionary with lists of values per parameter.
+
+            Returns:
+                int: Total number of parameter combinations to process.
+            """
             c = 1
             for v in g.values():
                 c *= max(1, len(v))
@@ -732,19 +908,34 @@ class MainWindow(QMainWindow):
         self._thread.start()
 
     def _on_batch_finished(self, out_dir: str):
+        """
+        Callback when batch search finishes.
+
+        Args:
+            out_dir (str): Directory containing batch results.
+        """
         self.btn_convert.setEnabled(True)
         self.btn_batch.setEnabled(True)
         info(self, "Batch done", f"Saved previews and params.txt to:\n{out_dir}")
 
     # --------------- Guided methods -----------------------
     def _set_guided_enabled(self, on: bool):
+        """
+        Enable or disable all guided build widgets.
+
+        Args:
+            on (bool): True to enable, False to disable.
+        """
         for w in (self.lbl_step, self.lbl_next, self.lbl_switch,
                 self.spin_step, self.btn_jump_to,
                 self.btn_prev, self.btn_next, self.btn_switch,
                 self.btn_save_session, self.btn_load_session):
             w.setEnabled(on)
 
-    def _setup_guide_ui(self):
+    def _setup_guided_ui(self):
+        """
+        Update guided build UI elements according to the current guided index and path length.
+        """
         N = len(self.guided_path)
         self.spin_step.blockSignals(True)
         self.spin_step.setRange(0, max(0, N))
@@ -756,6 +947,9 @@ class MainWindow(QMainWindow):
         self._update_step_label()
 
     def _update_step_label(self):
+        """
+        Update the displayed current step and next segment in guided build.
+        """
         N = len(self.guided_path)
         i = self.guided_index
         self.lbl_step.setText(f"Step: {i + 1} / {N}")
@@ -766,6 +960,9 @@ class MainWindow(QMainWindow):
             self.lbl_next.setText("Next: - → -")
 
     def _on_step_jump(self):
+        """
+        Handle the user jumping to a specific step in the guided build.
+        """
         N = len(self.guided_path)
         v = int(self.spin_step.value())
         v = max(0, min(N, v))
@@ -777,6 +974,9 @@ class MainWindow(QMainWindow):
             self._update_step_label()
 
     def _step_prev(self):
+        """
+        Move guided build one step backward.
+        """
         if self.guided_index > 0:
             self.guided_index -= 1
             self.spin_step.blockSignals(True)
@@ -785,6 +985,9 @@ class MainWindow(QMainWindow):
             self._render_guided()
 
     def _step_next(self):
+        """
+        Move guided build one step forward.
+        """
         if self.guided_index < len(self.guided_path):
             self.guided_index += 1
             self.spin_step.blockSignals(True)
@@ -794,7 +997,7 @@ class MainWindow(QMainWindow):
 
     def _switch_preview(self):
         """
-        Switch between rendering Full preview image and guided building image
+        Toggle preview between the full rendered image and guided build visualization.
         """
         if self.is_render_guided:
             self.is_render_guided = False
@@ -814,6 +1017,9 @@ class MainWindow(QMainWindow):
             self.lbl_switch.setText('Finished | <span style="font-weight:bold;">Pin-by-Pin</span>')
 
     def _guided_save_session(self):
+        """
+        Save the current guided session (pins, path, work size, index) to a JSON file.
+        """
         if not self.guided_path or self.guided_pins is None:
             info(self, "No session", "Run a conversion or load a path first.")
             return
@@ -835,6 +1041,9 @@ class MainWindow(QMainWindow):
             error(self, "Save failed", str(e))
 
     def _guided_load_session(self):
+        """
+        Load a guided session from a JSON file.
+        """
         path, _ = QFileDialog.getOpenFileName(self, "Load session", "", "JSON (*.json)")
         if not path:
             return
@@ -853,6 +1062,10 @@ class MainWindow(QMainWindow):
             error(self, "Load failed", str(e))
 
     def _guided_load_path(self):
+        """
+        Load a CSV file containing a pin path for guided build.
+        Initializes preview and guided UI accordingly.
+        """
         path, _ = QFileDialog.getOpenFileName(self, "Load path CSV", "", "CSV (*.csv *.txt)")
         if not path:
             return
@@ -933,6 +1146,10 @@ class MainWindow(QMainWindow):
             error(self, "Load failed", str(e))
 
     def _render_guided(self):
+        """
+        Render the guided pin-by-pin build up to the current guided index.
+        Draws next segment in blue on the circular board.
+        """
         if self.guided_pins is None or self.guided_work_size <= 0:
             return
         N = len(self.guided_path)
