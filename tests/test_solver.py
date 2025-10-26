@@ -84,7 +84,7 @@ def test_solve_string_art_all_black():
     )
     # Should attempt to draw lines
     assert len(path) > 0
-    #assert error.shape == (16, 16)
+    assert error.shape == (16, 16)
 
 def test_solve_string_art_line_weight_zero():
     img = np.zeros((16, 16), dtype=np.uint8)
