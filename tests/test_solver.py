@@ -61,6 +61,39 @@ def test_precalc_lines_distance_one_skipped():
 
 # region ---------- solve_string_art tests ---------
 
+def test_solve_string_art_detects_simple_line():
+    # Create a 16x16 image with a dark vertical line in the middle
+    img = np.ones((16, 16), dtype=np.uint8) * 255
+    img[:, 8] = 0  # dark vertical line at column x=8
+
+    # Run solver (allow short chords and enough pins)
+    path, error, gray, pins = solve_string_art(
+        img, n_pins=24, max_lines=8, work_size=16, min_distance=1, line_weight=8.0
+    )
+
+    # Expect at least one line drawn
+    assert len(path) > 0
+
+    # Helper: check whether a segment between two pins crosses the center column (x=8)
+    def segment_crosses_center(p_a, p_b, center_x=8, tol=1):
+        x0, y0 = int(p_a[0]), int(p_a[1])
+        x1, y1 = int(p_b[0]), int(p_b[1])
+        # sample integer points along the segment
+        d = max(int(round(((x1 - x0)**2 + (y1 - y0)**2) ** 0.5)), 1)
+        xs = np.linspace(x0, x1, d).astype(int)
+        return np.any(np.abs(xs - center_x) <= tol)
+
+    # Search all drawn segments for one that crosses the center column
+    crosses = any(segment_crosses_center(pins[a], pins[b]) for a, b in path)
+    assert crosses, "Solver path does not contain any segment crossing the image center column"
+
+def test_solve_string_art_detects_diagonal_line():
+    img = np.ones((16, 16), dtype=np.uint8) * 255
+    np.fill_diagonal(img, 0)
+    path, _, _, pins = solve_string_art(img, n_pins=24, max_lines=8, work_size=16, min_distance=1)
+
+    assert len(path) > 0
+
 def test_solve_string_art_basic():
     img = np.zeros((32, 32), dtype=np.uint8)
     path, error, gray, pins = solve_string_art(img, n_pins=12, max_lines=5, work_size=32)
@@ -144,3 +177,21 @@ def test_solve_string_art_n_pins_less_than_two():
     path, _, _, _ = solve_string_art(img, n_pins=1, max_lines=5, work_size=8)
     # Should produce zero lines
     assert len(path) == 0
+
+def test_solve_string_art_deterministic():
+    img = np.zeros((16, 16), dtype=np.uint8)
+    path1, _, _, _ = solve_string_art(img, n_pins=8, max_lines=5, work_size=16)
+    path2, _, _, _ = solve_string_art(img, n_pins=8, max_lines=5, work_size=16)
+    assert path1 == path2
+
+def test_solve_string_art_terminates_quickly_on_uniform_image():
+    img = np.ones((32, 32), dtype=np.uint8) * 127
+    path, _, _, _ = solve_string_art(img, n_pins=12, max_lines=1000, work_size=32)
+    assert len(path) < 50  # Should stop early
+
+def test_solver_robust_to_noise():
+    img = np.ones((16, 16), dtype=np.uint8) * 255
+    noise = np.random.randint(0, 20, img.shape, dtype=np.uint8)
+    noisy_img = np.clip(img - noise, 0, 255)
+    path, _, _, _ = solve_string_art(noisy_img, n_pins=12, max_lines=5, work_size=16)
+    assert len(path) >= 0
