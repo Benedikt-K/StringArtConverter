@@ -4,7 +4,7 @@ import cv2
 
 from StringArtConverter.utils import Segment
 
-# -------------------- Pin + Line Precomputation --------------------
+# region -------------------- Pin + Line Precomputation --------------------
 
 def pin_positions_circle(size: int, n_pins: int, margin: int = 1) -> np.ndarray:
     """
@@ -20,7 +20,7 @@ def pin_positions_circle(size: int, n_pins: int, margin: int = 1) -> np.ndarray:
         np.ndarray: Array of shape (n_pins, 2) containing integer (x, y) coordinates.
     """
     cx, cy = size / 2, size / 2
-    r = size / 2 - margin
+    r = max(size / 2 - margin, 0)
     ang = np.linspace(0, 2 * math.pi, n_pins, endpoint=False)
     xs = (cx + r * np.cos(ang)).astype(np.int32)
     ys = (cy + r * np.sin(ang)).astype(np.int32)
@@ -50,7 +50,7 @@ def precalc_lines(pins: np.ndarray, n_pins: int, size: int, min_distance: int):
         for j in range(i + min_distance, n_pins):
             x0, y0 = pins[i]
             x1, y1 = pins[j]
-            d = int(math.hypot(x1 - x0, y1 - y0))
+            d = max(int(math.hypot(x1 - x0, y1 - y0)), 1)
             if d <= 1: 
                 continue
             xs = np.linspace(x0, x1, d).astype(np.int32)
@@ -59,8 +59,9 @@ def precalc_lines(pins: np.ndarray, n_pins: int, size: int, min_distance: int):
             line_cache[(i, j)] = idx
             line_cache[(j, i)] = idx
     return line_cache
+# endregion
 
-# -------------------- Core Solver --------------------
+# region -------------------- Core Solver --------------------
 
 def solve_string_art(
     source_brightness_u8: np.ndarray,
@@ -114,6 +115,12 @@ def solve_string_art(
     pins = pin_positions_circle(work_size, n_pins)
     line_cache = precalc_lines(pins, n_pins, work_size, min_distance)
 
+    # Safety: if too few pins or no valid lines, return early
+    if n_pins < 2 or not line_cache:
+        if progress_cb:
+            progress_cb(100)
+        return [], np.zeros((work_size, work_size), dtype=np.float32), gray, pins
+
     # make sure is same size
     gray = cv2.resize(gray, (work_size, work_size), interpolation=cv2.INTER_AREA)
 
@@ -159,7 +166,7 @@ def solve_string_art(
             if test_pin in last_pins:
                 continue
             idx = line_cache.get((current_pin, test_pin))
-            if idx is None:
+            if idx is None or len(idx) == 0:
                 continue
 
             old_err = error[idx].sum()
@@ -190,4 +197,9 @@ def solve_string_art(
     if progress_cb:
         progress_cb(100)
 
+    # reshape for return
+    gray = gray.reshape(H, W)
+
     return path, error.reshape(H, W), gray, pins
+
+# endregion
