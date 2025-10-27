@@ -123,10 +123,7 @@ def test_build_importance_map_returns_valid_range(dummy_gray, monkeypatch):
 
     monkeypatch.setattr(pp.mp.solutions.face_mesh, "FaceMesh", lambda **_: DummyFaceMesh())
 
-    # warning here stems from the rembg library
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        imp = pp.build_importance_map(dummy_gray, worksize=16)
+    imp = pp.build_importance_map(dummy_gray, worksize=16)
     assert imp.shape == (16, 16)
     assert imp.dtype == np.float32
     assert np.all((imp >= 0.1) & (imp <= 1.0))
