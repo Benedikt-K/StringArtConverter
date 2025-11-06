@@ -423,7 +423,7 @@ class MainWindow(QMainWindow):
         # jump-to input
         row_step = QHBoxLayout()
         self.spin_step = QSpinBox()
-        self.spin_step.setRange(0, 0)  # set real range in _setup_guide_ui()
+        self.spin_step.setRange(0, 0)  # set real range in _setup_guided_ui()
         self.spin_step.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         self.spin_step.setMinimumWidth(90)
         self.btn_jump_to = QPushButton("Jump")
@@ -614,7 +614,7 @@ class MainWindow(QMainWindow):
         self.guided_pins = pins
         self.guided_work_size = self.current_work_size
         self.guided_index = -1
-        self._setup_guide_ui()
+        self._setup_guided_ui()
         self._render_guided()
 
         self.btn_convert.setEnabled(True)
@@ -1134,7 +1134,7 @@ class MainWindow(QMainWindow):
                 self.image_label.setPixmap(to_qpixmap_from_rgb(rgb, self.image_label.size()))
                 self._update_step_label()
 
-            self._setup_guide_ui()
+            self._setup_guided_ui()
 
             # render guided and change switch button
             self.is_render_guided = True
